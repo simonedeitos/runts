@@ -14,6 +14,7 @@ partial class MainForm
     private Button btnExportCsv = null!;
     private Button btnExportExcel = null!;
     private NumericUpDown numThread = null!;
+    private CheckBox chkShowChrome = null!;
     private NumericUpDown numDelay = null!;
     private Label lblTotale = null!;
     private Label lblElaborati = null!;
@@ -49,6 +50,7 @@ partial class MainForm
         btnExportCsv = new Button();
         btnExportExcel = new Button();
         numThread = new NumericUpDown();
+        chkShowChrome = new CheckBox();
         numDelay = new NumericUpDown();
         lblTotale = new Label();
         lblElaborati = new Label();
@@ -121,6 +123,11 @@ partial class MainForm
         numThread.Location = new Point(135, 60);
         numThread.Size = new Size(80, 27);
 
+        chkShowChrome.Text = "Mostra finestre Chrome (debug)";
+        chkShowChrome.Location = new Point(20, 92);
+        chkShowChrome.Size = new Size(260, 24);
+        chkShowChrome.Checked = false;
+
         lblDelay.Text = "Delay richieste (ms)";
         lblDelay.Location = new Point(240, 62);
         lblDelay.Size = new Size(140, 24);
@@ -132,27 +139,27 @@ partial class MainForm
         numDelay.Location = new Point(390, 60);
         numDelay.Size = new Size(100, 27);
 
-        progressBar.Location = new Point(20, 95);
+        progressBar.Location = new Point(20, 122);
         progressBar.Size = new Size(1150, 22);
 
-        lblFonte.Location = new Point(20, 122);
+        lblFonte.Location = new Point(20, 149);
         lblFonte.Size = new Size(1150, 24);
 
-        lblTotale.Location = new Point(20, 148);
+        lblTotale.Location = new Point(20, 175);
         lblTotale.Size = new Size(170, 24);
-        lblElaborati.Location = new Point(200, 148);
+        lblElaborati.Location = new Point(200, 175);
         lblElaborati.Size = new Size(170, 24);
-        lblSiti.Location = new Point(380, 148);
+        lblSiti.Location = new Point(380, 175);
         lblSiti.Size = new Size(170, 24);
-        lblEmail.Location = new Point(560, 148);
+        lblEmail.Location = new Point(560, 175);
         lblEmail.Size = new Size(170, 24);
-        lblPec.Location = new Point(740, 148);
+        lblPec.Location = new Point(740, 175);
         lblPec.Size = new Size(170, 24);
-        lblErrori.Location = new Point(920, 148);
+        lblErrori.Location = new Point(920, 175);
         lblErrori.Size = new Size(170, 24);
 
-        gridEnti.Location = new Point(20, 182);
-        gridEnti.Size = new Size(1235, 548);
+        gridEnti.Location = new Point(20, 210);
+        gridEnti.Size = new Size(1235, 520);
         gridEnti.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         gridEnti.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         gridEnti.AllowUserToAddRows = false;
@@ -162,6 +169,7 @@ partial class MainForm
         toolTip.SetToolTip(cmbModalita, "Seleziona la modalità: RUNTS ufficiale, Pro Loco da albo PDF oppure Pro Loco per comune");
         toolTip.SetToolTip(cmbRegione, "Regione italiana da importare");
         toolTip.SetToolTip(numThread, "Numero massimo thread di lavoro (1-10)");
+        toolTip.SetToolTip(chkShowChrome, "Se selezionato apre le finestre Chrome durante l'elaborazione");
         toolTip.SetToolTip(numDelay, "Delay tra richieste HTTP in millisecondi");
         toolTip.SetToolTip(btnImporta, "Importa enti RUNTS reali, Pro Loco da albi regionali ufficiali PDF o Pro Loco generate dai comuni ISTAT");
 
@@ -178,6 +186,7 @@ partial class MainForm
             btnExportExcel,
             lblThread,
             numThread,
+            chkShowChrome,
             lblDelay,
             numDelay,
             progressBar,

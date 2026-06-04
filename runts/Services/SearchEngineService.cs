@@ -1,29 +1,15 @@
-using HtmlAgilityPack;
+using OpenQA.Selenium;
+using runts.Helpers;
 using runts.Models;
-using System.Text.RegularExpressions;
 
 namespace runts.Services;
 
 public sealed class SearchEngineService
 {
-    private const string DuckDuckGoHtmlSearchUrl = "https://duckduckgo.com/html/?q=";
-    private static readonly string[] ExcludedHosts =
-    [
-        "facebook.com",
-        "instagram.com",
-        "youtube.com",
-        "linkedin.com",
-        "paginebianche.it",
-        "comune.",
-        "wikipedia.org"
-    ];
-
-    private readonly HttpClient _httpClient;
     private readonly LoggerService _logger;
 
-    public SearchEngineService(HttpClient httpClient, LoggerService logger)
+    public SearchEngineService(LoggerService logger)
     {
-        _httpClient = httpClient;
         _logger = logger;
     }
 
@@ -50,128 +36,87 @@ public sealed class SearchEngineService
         ];
     }
 
-    public async Task<string> FindBestWebsiteAsync(Ente ente, CancellationToken cancellationToken = default)
+    public async Task<string> FindBestWebsiteAsync(Ente ente, bool headless = true, CancellationToken cancellationToken = default)
     {
+        using var chrome = new ChromeAutomationHelper(_logger, headless);
         var queries = CostruisciQuery(ente);
+
         foreach (var query in queries)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             try
             {
-                var url = $"{DuckDuckGoHtmlSearchUrl}{Uri.EscapeDataString(query)}";
-                using var response = await _httpClient.GetAsync(url, cancellationToken);
-                if (!response.IsSuccessStatusCode)
-                {
-                    await _logger.LogAsync($"Ricerca web non disponibile per query '{query}': HTTP {(int)response.StatusCode}", cancellationToken);
-                    continue;
-                }
-
-                var html = await response.Content.ReadAsStringAsync(cancellationToken);
-                var match = ExtractCandidateUrls(html)
-                    .FirstOrDefault(candidate => IsCandidateMatch(candidate, ente));
+                await _logger.LogAsync($"Ricerca Google: '{query}'", cancellationToken);
+                var googleResults = await chrome.SearchGoogleAsync(query, cancellationToken);
+                var match = googleResults.FirstOrDefault(url => IsCandidateMatch(url, ente));
 
                 if (!string.IsNullOrWhiteSpace(match))
                 {
-                    await _logger.LogAsync($"Sito individuato per {ente.Denominazione}: {match}", cancellationToken);
-                    return match;
+                    var domain = ExtractDomain(match);
+                    await _logger.LogAsync($"SITO TROVATO: {domain}", cancellationToken);
+                    return domain;
                 }
+
+                if (googleResults.Count == 0)
+                {
+                    await _logger.LogAsync($"Google senza risultati, provo Bing: '{query}'", cancellationToken);
+                    var bingResults = await chrome.SearchBingAsync(query, cancellationToken);
+                    match = bingResults.FirstOrDefault(url => IsCandidateMatch(url, ente));
+
+                    if (!string.IsNullOrWhiteSpace(match))
+                    {
+                        var domain = ExtractDomain(match);
+                        await _logger.LogAsync($"SITO TROVATO (Bing): {domain}", cancellationToken);
+                        return domain;
+                    }
+                }
+
+                await Task.Delay(2000, cancellationToken);
             }
-            catch (TaskCanceledException)
+            catch (OperationCanceledException)
             {
-                await _logger.LogAsync($"Timeout ricerca sito per {ente.Denominazione} con query '{query}'.", cancellationToken);
+                throw;
             }
-            catch (HttpRequestException ex)
+            catch (WebDriverException ex)
             {
-                await _logger.LogAsync($"Errore rete ricerca sito per {ente.Denominazione}: {ex.Message}", cancellationToken);
+                await _logger.LogAsync($"Errore ricerca '{query}': {ex.Message}", cancellationToken);
             }
         }
 
+        await _logger.LogAsync($"NESSUN SITO trovato per {ente.Denominazione}", cancellationToken);
         return string.Empty;
     }
 
-    private static IEnumerable<string> ExtractCandidateUrls(string html)
+    private static bool IsCandidateMatch(string url, Ente ente)
     {
-        var document = new HtmlAgilityPack.HtmlDocument();
-        document.LoadHtml(html);
-
-        var links = document.DocumentNode.SelectNodes("//a[contains(@class,'result__a') or contains(@href,'uddg=')]");
-        if (links is null)
-        {
-            yield break;
-        }
-
-        foreach (var link in links)
-        {
-            var href = link.GetAttributeValue("href", string.Empty);
-            var candidate = DecodeDuckDuckGoUrl(href);
-            if (string.IsNullOrWhiteSpace(candidate))
-            {
-                continue;
-            }
-
-            if (Uri.TryCreate(candidate, UriKind.Absolute, out var uri)
-                && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
-            {
-                yield return uri.GetLeftPart(UriPartial.Authority);
-            }
-        }
-    }
-
-    private static string DecodeDuckDuckGoUrl(string href)
-    {
-        if (string.IsNullOrWhiteSpace(href))
-        {
-            return string.Empty;
-        }
-
-        if (Uri.TryCreate(href, UriKind.Absolute, out var absoluteHref)
-            && !absoluteHref.Host.Contains("duckduckgo.com", StringComparison.OrdinalIgnoreCase))
-        {
-            return absoluteHref.ToString();
-        }
-
-        if (!href.Contains("uddg=", StringComparison.OrdinalIgnoreCase))
-        {
-            return string.Empty;
-        }
-
-        var query = href.Split('?', 2).ElementAtOrDefault(1) ?? string.Empty;
-        foreach (var parameter in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var parts = parameter.Split('=', 2);
-            if (parts.Length == 2 && parts[0].Equals("uddg", StringComparison.OrdinalIgnoreCase))
-            {
-                return Uri.UnescapeDataString(parts[1]);
-            }
-        }
-
-        return string.Empty;
-    }
-
-    private static bool IsCandidateMatch(string candidate, Ente ente)
-    {
-        if (!Uri.TryCreate(candidate, UriKind.Absolute, out var uri))
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
         {
             return false;
         }
 
-        if (ExcludedHosts.Any(host => uri.Host.Contains(host, StringComparison.OrdinalIgnoreCase)))
+        var excluded = new[] { "facebook.com", "instagram.com", "youtube.com", "linkedin.com", "wikipedia.org", "paginebianche.it", "comune." };
+        if (excluded.Any(host => uri.Host.Contains(host, StringComparison.OrdinalIgnoreCase)))
         {
             return false;
         }
 
-        var comparable = $"{ente.Denominazione} {ente.Comune}"
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(token => Regex.Replace(token.ToLowerInvariant(), "[^a-z0-9]+", string.Empty))
-            .Where(token => token.Length >= 4)
-            .Distinct()
-            .ToArray();
-        var hostComparable = Regex.Replace(uri.Host.ToLowerInvariant(), "[^a-z0-9]+", string.Empty);
-        var comuneComparable = Regex.Replace(ente.Comune.ToLowerInvariant(), "[^a-z0-9]+", string.Empty);
+        var host = uri.Host.ToLowerInvariant();
+        var comune = ente.Comune.ToLowerInvariant().Replace(" ", string.Empty, StringComparison.Ordinal);
+        var denominazione = ente.Denominazione.ToLowerInvariant().Replace(" ", string.Empty, StringComparison.Ordinal);
 
-        return comparable.Length == 0
-            || comparable.Any(hostComparable.Contains)
-            || (!string.IsNullOrWhiteSpace(comuneComparable) && hostComparable.Contains(comuneComparable));
+        return host.Contains("proloco", StringComparison.OrdinalIgnoreCase)
+            || (!string.IsNullOrWhiteSpace(comune) && host.Contains(comune, StringComparison.OrdinalIgnoreCase))
+            || (!string.IsNullOrWhiteSpace(denominazione) && host.Contains(denominazione, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string ExtractDomain(string url)
+    {
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            return uri.GetLeftPart(UriPartial.Authority);
+        }
+
+        return string.Empty;
     }
 }

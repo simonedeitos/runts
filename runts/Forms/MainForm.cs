@@ -1,6 +1,7 @@
 using runts.Models;
 using runts.Services;
 using System.ComponentModel;
+using OpenQA.Selenium;
 
 namespace runts.Forms;
 
@@ -86,6 +87,7 @@ public partial class MainForm : Form
 
         try
         {
+            var headless = !chkShowChrome.Checked;
             var progress = new Progress<(Ente ente, EnteStatistiche stats)>(x =>
             {
                 if (InvokeRequired)
@@ -98,12 +100,32 @@ public partial class MainForm : Form
                 }
             });
 
-            await _contactFinder.ProcessRegionAsync(regione, (int)numThread.Value, (int)numDelay.Value, progress, _cts.Token);
+            await _contactFinder.ProcessRegionAsync(regione, (int)numThread.Value, (int)numDelay.Value, headless, progress, _cts.Token);
             await RefreshGridAsync();
         }
         catch (OperationCanceledException)
         {
             MessageBox.Show("Elaborazione fermata.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (WebDriverException ex) when (ex.Message.Contains("chromedriver", StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show(
+                "ChromeDriver non compatibile con versione Chrome installata.\n\nAggiornare i package Selenium/ChromeDriver.",
+                "Driver Update",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+        catch (WebDriverException ex) when (ex.Message.Contains("chrome", StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show(
+                "Google Chrome non è installato o ChromeDriver non è compatibile.\n\nInstallare Chrome da: https://www.google.com/chrome/",
+                "Chrome Required",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("Chrome", StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show(ex.Message, "Errore Chrome", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 

@@ -1,5 +1,6 @@
 using runts.Models;
 using System.Threading.Channels;
+using OpenQA.Selenium;
 
 namespace runts.Services;
 
@@ -31,6 +32,7 @@ public sealed class ContactFinderService
         string regione,
         int workerCount,
         int delayMs,
+        bool headless,
         IProgress<(Ente ente, EnteStatistiche stats)> progress,
         CancellationToken cancellationToken)
     {
@@ -62,25 +64,25 @@ public sealed class ContactFinderService
             await foreach (var ente in channel.Reader.ReadAllAsync(cancellationToken))
             {
                 _pauseEvent.Wait(cancellationToken);
-                await ProcessEnteAsync(ente, delayMs, stats, progress, cancellationToken);
+                await ProcessEnteAsync(ente, delayMs, headless, stats, progress, cancellationToken);
             }
         }, cancellationToken)).ToArray();
 
         await Task.WhenAll(consumers.Append(producer));
     }
 
-    private async Task ProcessEnteAsync(Ente ente, int delayMs, EnteStatistiche stats, IProgress<(Ente ente, EnteStatistiche stats)> progress, CancellationToken cancellationToken)
+    private async Task ProcessEnteAsync(Ente ente, int delayMs, bool headless, EnteStatistiche stats, IProgress<(Ente ente, EnteStatistiche stats)> progress, CancellationToken cancellationToken)
     {
         await _workerSemaphore.WaitAsync(cancellationToken);
         try
         {
             if (string.IsNullOrWhiteSpace(ente.SitoWeb))
             {
-                ente.SitoWeb = await _searchEngineService.FindBestWebsiteAsync(ente, cancellationToken);
+                ente.SitoWeb = await _searchEngineService.FindBestWebsiteAsync(ente, headless, cancellationToken);
                 ente.Stato = string.IsNullOrWhiteSpace(ente.SitoWeb) ? StatoEnte.DA_ELABORARE : StatoEnte.SITO_TROVATO;
             }
 
-            var result = await _webScraperService.AnalyzeAsync(ente.SitoWeb, delayMs, cancellationToken);
+            var result = await _webScraperService.AnalyzeAsync(ente.SitoWeb, delayMs, headless, cancellationToken);
             if (result.emails.Count > 0)
             {
                 ente.Email = string.Join(';', result.emails);
@@ -110,6 +112,14 @@ public sealed class ContactFinderService
             }
         }
         catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("Chrome", StringComparison.OrdinalIgnoreCase))
+        {
+            throw;
+        }
+        catch (WebDriverException ex) when (ex.Message.Contains("chrome", StringComparison.OrdinalIgnoreCase) || ex.Message.Contains("chromedriver", StringComparison.OrdinalIgnoreCase))
         {
             throw;
         }
