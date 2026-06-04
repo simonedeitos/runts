@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Text;
 using WebDriverManager;
 using WebDriverManager.DriverConfigs.Impl;
+using WebDriverManager.Helpers;
 
 namespace runts.Helpers;
 
@@ -235,13 +236,18 @@ public sealed class ChromeAutomationHelper : IDisposable
         _logger.LogAsync("  INIZIALIZZAZIONE CHROME AUTOMATION  ").GetAwaiter().GetResult();
         _logger.LogAsync("═══════════════════════════════════════").GetAwaiter().GetResult();
 
-        _logger.LogAsync("[1/4] Rilevamento Chrome installato...").GetAwaiter().GetResult();
         var options = new ChromeOptions();
+        _logger.LogAsync("[1/4] Rilevamento Chrome installato...").GetAwaiter().GetResult();
         var chromeExe = GetChromeExecutablePath();
+        string? chromeVersion = null;
+        string? chromeMajorVersion = null;
         if (!string.IsNullOrWhiteSpace(chromeExe))
         {
             options.BinaryLocation = chromeExe;
+            chromeVersion = GetChromeVersion(chromeExe);
+            chromeMajorVersion = GetMajorVersion(chromeVersion);
             _logger.LogAsync($"✓ Chrome trovato: {chromeExe}").GetAwaiter().GetResult();
+            _logger.LogAsync($"✓ Versione Chrome: {chromeVersion ?? "sconosciuta"}").GetAwaiter().GetResult();
         }
         else
         {
@@ -275,16 +281,89 @@ public sealed class ChromeAutomationHelper : IDisposable
         try
         {
             _logger.LogAsync("[3/4] Setup ChromeDriver automatico...").GetAwaiter().GetResult();
-            new DriverManager().SetUpDriver(new ChromeConfig());
-            _logger.LogAsync("✓ ChromeDriver configurato correttamente").GetAwaiter().GetResult();
+            if (!string.IsNullOrWhiteSpace(chromeMajorVersion))
+            {
+                _logger.LogAsync($"Richiesta ChromeDriver versione {chromeMajorVersion} (compatibile con Chrome installato)").GetAwaiter().GetResult();
+                try
+                {
+                    new DriverManager().SetUpDriver(new ChromeConfig(), VersionResolveStrategy.MatchingBrowser);
+                    _logger.LogAsync($"✓ ChromeDriver v{chromeMajorVersion} configurato correttamente").GetAwaiter().GetResult();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogAsync($"⚠ Setup con MatchingBrowser fallito: {ex.Message}").GetAwaiter().GetResult();
+                    if (!TryDownloadSpecificChromeDriver(chromeMajorVersion).GetAwaiter().GetResult())
+                    {
+                        _logger.LogAsync("Tentativo con versione latest...").GetAwaiter().GetResult();
+                        new DriverManager().SetUpDriver(new ChromeConfig());
+                    }
+                }
+            }
+            else
+            {
+                _logger.LogAsync("Versione Chrome non rilevata, uso configurazione automatica").GetAwaiter().GetResult();
+                try
+                {
+                    new DriverManager().SetUpDriver(new ChromeConfig(), VersionResolveStrategy.MatchingBrowser);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogAsync($"⚠ Setup MatchingBrowser non disponibile: {ex.Message}").GetAwaiter().GetResult();
+                    new DriverManager().SetUpDriver(new ChromeConfig());
+                }
+            }
+
+            var driverExePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "chromedriver.exe");
+            if (File.Exists(driverExePath))
+            {
+                _logger.LogAsync($"ChromeDriver path: {driverExePath}").GetAwaiter().GetResult();
+                _logger.LogAsync($"ChromeDriver size: {new FileInfo(driverExePath).Length / 1024} KB").GetAwaiter().GetResult();
+                _logger.LogAsync($"ChromeDriver modificato: {File.GetLastWriteTime(driverExePath)}").GetAwaiter().GetResult();
+                try
+                {
+                    var driverVersionInfo = FileVersionInfo.GetVersionInfo(driverExePath);
+                    var driverVersion = driverVersionInfo.FileVersion ?? driverVersionInfo.ProductVersion;
+                    _logger.LogAsync($"ChromeDriver scaricato: v{driverVersion}").GetAwaiter().GetResult();
+                    if (!string.IsNullOrWhiteSpace(chromeMajorVersion) && !string.IsNullOrWhiteSpace(driverVersion))
+                    {
+                        var driverMajor = GetMajorVersion(driverVersion);
+                        if (!string.Equals(chromeMajorVersion, driverMajor, StringComparison.Ordinal))
+                        {
+                            _logger.LogAsync($"⚠ ATTENZIONE: Chrome v{chromeMajorVersion} ma ChromeDriver v{driverMajor} - potrebbero esserci incompatibilità").GetAwaiter().GetResult();
+                        }
+                        else
+                        {
+                            _logger.LogAsync($"✓ Compatibilità verificata: Chrome {chromeMajorVersion} = ChromeDriver {driverMajor}").GetAwaiter().GetResult();
+                        }
+                    }
+                }
+                catch
+                {
+                }
+            }
+            else
+            {
+                _logger.LogAsync($"⚠ ChromeDriver non trovato in: {driverExePath}").GetAwaiter().GetResult();
+            }
 
             _logger.LogAsync("[4/4] Avvio sessione Chrome...").GetAwaiter().GetResult();
-            _driver = new ChromeDriver(options);
+            var service = ChromeDriverService.CreateDefaultService();
+            service.SuppressInitialDiagnosticInformation = true;
+            service.HideCommandPromptWindow = true;
+
+            _driver = new ChromeDriver(service, options, TimeSpan.FromSeconds(60));
             _driver.Manage().Timeouts().PageLoad = TimeSpan.FromSeconds(30);
             _driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(5);
             _wait = new WebDriverWait(_driver, TimeSpan.FromSeconds(15));
             _logger.LogAsync($"✓ Sessione Chrome inizializzata con successo (Headless: {headless})").GetAwaiter().GetResult();
             _logger.LogAsync("✓ Chrome pronto per l'automazione!").GetAwaiter().GetResult();
+        }
+        catch (WebDriverException ex) when (ex.Message.Contains("This version of ChromeDriver only supports Chrome version", StringComparison.OrdinalIgnoreCase))
+        {
+            var errorMsg = BuildVersionMismatchErrorMessage(ex, chromeVersion, chromeExe);
+            _logger.LogAsync("❌ ERRORE INCOMPATIBILITÀ VERSIONE").GetAwaiter().GetResult();
+            _logger.LogAsync(errorMsg).GetAwaiter().GetResult();
+            throw new InvalidOperationException(errorMsg, ex);
         }
         catch (WebDriverException ex)
         {
@@ -316,6 +395,35 @@ public sealed class ChromeAutomationHelper : IDisposable
         };
 
         return chromePaths.FirstOrDefault(File.Exists);
+    }
+
+    private static string? GetChromeVersion(string? chromeExePath)
+    {
+        if (string.IsNullOrEmpty(chromeExePath) || !File.Exists(chromeExePath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var versionInfo = FileVersionInfo.GetVersionInfo(chromeExePath);
+            return versionInfo.FileVersion ?? versionInfo.ProductVersion;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? GetMajorVersion(string? fullVersion)
+    {
+        if (string.IsNullOrWhiteSpace(fullVersion))
+        {
+            return null;
+        }
+
+        var parts = fullVersion.Split('.');
+        return parts.Length > 0 ? parts[0] : null;
     }
 
     private static string BuildDetailedErrorMessage(Exception ex, string? chromeExePath)
@@ -354,6 +462,55 @@ public sealed class ChromeAutomationHelper : IDisposable
         sb.AppendLine("═══════════════════════════════════════════════════");
 
         return sb.ToString();
+    }
+
+    private static string BuildVersionMismatchErrorMessage(Exception ex, string? chromeVersion, string? chromeExePath)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("═══════════════════════════════════════════════════");
+        sb.AppendLine("ERRORE: INCOMPATIBILITÀ VERSIONE CHROME/CHROMEDRIVER");
+        sb.AppendLine("═══════════════════════════════════════════════════");
+        sb.AppendLine();
+        sb.AppendLine("PROBLEMA:");
+        sb.AppendLine($"  Chrome installato: v{chromeVersion ?? "sconosciuta"}");
+        sb.AppendLine("  ChromeDriver scaricato: versione NON compatibile");
+        sb.AppendLine();
+        sb.AppendLine("DETTAGLI ERRORE:");
+        sb.AppendLine($"  {ex.Message}");
+        sb.AppendLine();
+        sb.AppendLine("SOLUZIONI IMMEDIATE:");
+        sb.AppendLine("  1. AGGIORNA CHROME all'ultima versione stabile");
+        sb.AppendLine("     Download: https://www.google.com/chrome/");
+        sb.AppendLine();
+        sb.AppendLine("  2. RIAVVIA L'APPLICAZIONE dopo aver aggiornato Chrome");
+        sb.AppendLine("     Il sistema scaricherà automaticamente il driver compatibile");
+        sb.AppendLine();
+        sb.AppendLine("  3. Se il problema persiste:");
+        sb.AppendLine("     - Chiudi tutte le finestre Chrome");
+        sb.AppendLine("     - Elimina manualmente ChromeDriver:");
+        sb.AppendLine($"       {Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "chromedriver.exe")}");
+        sb.AppendLine("     - Riavvia l'applicazione");
+        sb.AppendLine();
+        sb.AppendLine("DIAGNOSTICA:");
+        sb.AppendLine($"  Chrome path: {chromeExePath ?? "non trovato"}");
+        sb.AppendLine($"  Directory app: {AppDomain.CurrentDomain.BaseDirectory}");
+        sb.AppendLine("═══════════════════════════════════════════════════");
+        return sb.ToString();
+    }
+
+    private async Task<bool> TryDownloadSpecificChromeDriver(string chromeMajorVersion)
+    {
+        try
+        {
+            await _logger.LogAsync($"Tentativo download manuale ChromeDriver v{chromeMajorVersion}...");
+            await _logger.LogAsync("Download manuale non implementato, usa WebDriverManager");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            await _logger.LogAsync($"Download manuale fallito: {ex.Message}");
+            return false;
+        }
     }
 
     private static IEnumerable<string> GetPagesToScan(string baseUrl)
