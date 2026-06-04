@@ -1,28 +1,34 @@
 using AngleSharp;
 using System.Net;
-using System.Net.Http.Headers;
-using System.Text;
 using runts.Helpers;
 
 namespace runts.Services;
 
 /// <summary>
-/// Servizio ricerca web tramite Bright Data Web Unlocker API.
+/// Servizio ricerca web tramite Bright Data proxy.
 /// </summary>
 public sealed class BrightDataSearchService : IDisposable
 {
-    private const string BrightDataProxyUrl = "http://brd.superproxy.io:33335";
     private readonly LoggerService _logger;
+    private string _host = "brd.superproxy.io";
+    private int _port = 22225;
+    private string? _username;
+    private string? _password;
     private bool _disposed;
 
     public BrightDataSearchService(LoggerService logger)
     {
         _logger = logger;
+        LoadConfiguration();
     }
 
     public bool IsConfigured()
     {
-        return RegistrySettingsManager.IsBrightDataConfigured();
+        LoadConfiguration();
+        return !string.IsNullOrWhiteSpace(_username)
+               && !string.IsNullOrWhiteSpace(_password)
+               && !string.IsNullOrWhiteSpace(_host)
+               && _port > 0;
     }
 
     public async Task<List<string>> SearchGoogleAsync(string query, CancellationToken cancellationToken = default)
@@ -115,18 +121,17 @@ public sealed class BrightDataSearchService : IDisposable
 
     private async Task<string> FetchWithBrightDataAsync(string targetUrl, CancellationToken cancellationToken)
     {
-        var apiKey = RegistrySettingsManager.GetBrightDataApiKey();
-        if (string.IsNullOrWhiteSpace(apiKey))
-        {
-            return string.Empty;
-        }
-
         try
         {
+            var proxyUrl = $"http://{_host}:{_port}";
+            await _logger.LogAsync($"Proxy Bright Data: {proxyUrl}", cancellationToken);
+
             using var handler = new HttpClientHandler
             {
-                Proxy = new WebProxy(BrightDataProxyUrl),
-                Credentials = new NetworkCredential(apiKey, string.Empty),
+                Proxy = new WebProxy(proxyUrl)
+                {
+                    Credentials = new NetworkCredential(_username, _password)
+                },
                 UseProxy = true,
                 AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
             };
@@ -137,12 +142,10 @@ public sealed class BrightDataSearchService : IDisposable
             };
 
             using var request = new HttpRequestMessage(HttpMethod.Get, targetUrl);
-            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
+            request.Headers.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
             request.Headers.AcceptLanguage.ParseAdd("it-IT,it;q=0.9,en;q=0.8");
-            request.Headers.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-            request.Headers.Authorization = new AuthenticationHeaderValue(
-                "Basic",
-                Convert.ToBase64String(Encoding.UTF8.GetBytes($"{apiKey}:")));
+            request.Headers.AcceptEncoding.ParseAdd("gzip, deflate");
+            request.Headers.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
 
             using var response = await client.SendAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode)
@@ -170,6 +173,29 @@ public sealed class BrightDataSearchService : IDisposable
             await _logger.LogAsync($"Timeout Bright Data: {targetUrl}", cancellationToken);
             return string.Empty;
         }
+    }
+
+    private void LoadConfiguration()
+    {
+        _username = null;
+        _password = null;
+        _host = RegistrySettingsManager.GetBrightDataHost();
+        _port = RegistrySettingsManager.GetBrightDataPort();
+
+        var apiKey = RegistrySettingsManager.GetBrightDataApiKey();
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return;
+        }
+
+        var parts = apiKey.Split(':', 2);
+        if (parts.Length != 2)
+        {
+            return;
+        }
+
+        _username = parts[0];
+        _password = parts[1];
     }
 
     private static string NormalizeResultUrl(string? href)

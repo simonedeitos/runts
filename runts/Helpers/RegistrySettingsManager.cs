@@ -9,21 +9,55 @@ namespace runts.Helpers;
 public static class RegistrySettingsManager
 {
     private const string RegistryPath = @"Software\RuntsContactFinder";
+    private const string BrightDataApiKeyName = "BrightDataApiKey";
+    private const string BrightDataHostName = "BrightDataHost";
+    private const string BrightDataPortName = "BrightDataPort";
+    private const string DefaultBrightDataHost = "brd.superproxy.io";
+    private const int DefaultBrightDataPort = 22225;
 
     public static void SaveBrightDataApiKey(string apiKey)
     {
-        SaveSetting("BrightDataApiKey", apiKey);
+        SaveSetting(BrightDataApiKeyName, apiKey);
     }
 
     public static string? GetBrightDataApiKey()
     {
-        return GetSetting("BrightDataApiKey");
+        return GetSetting(BrightDataApiKeyName);
+    }
+
+    public static void SaveBrightDataHost(string host)
+    {
+        SaveSetting(BrightDataHostName, string.IsNullOrWhiteSpace(host) ? DefaultBrightDataHost : host);
+    }
+
+    public static string GetBrightDataHost()
+    {
+        var value = GetSetting(BrightDataHostName);
+        return string.IsNullOrWhiteSpace(value) ? DefaultBrightDataHost : value;
+    }
+
+    public static void SaveBrightDataPort(int port)
+    {
+        using var regKey = Registry.CurrentUser.CreateSubKey(RegistryPath);
+        regKey?.SetValue(BrightDataPortName, port, RegistryValueKind.DWord);
+    }
+
+    public static int GetBrightDataPort()
+    {
+        using var regKey = Registry.CurrentUser.OpenSubKey(RegistryPath);
+        var value = regKey?.GetValue(BrightDataPortName);
+        return value is int port ? port : DefaultBrightDataPort;
     }
 
     public static bool IsBrightDataConfigured()
     {
         var apiKey = GetBrightDataApiKey();
-        return !string.IsNullOrWhiteSpace(apiKey);
+        var host = GetBrightDataHost();
+        var port = GetBrightDataPort();
+        return !string.IsNullOrWhiteSpace(apiKey)
+               && apiKey.Contains(':')
+               && !string.IsNullOrWhiteSpace(host)
+               && port > 0;
     }
 
     public static void SaveSetting(string key, string value)
