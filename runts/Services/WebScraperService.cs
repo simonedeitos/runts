@@ -45,12 +45,15 @@ public sealed class WebScraperService
             var document = await parser.ParseDocumentAsync(html, cancellationToken);
             var content = document.DocumentElement?.TextContent ?? html;
 
-            foreach (var email in EmailExtractor.Extract(content))
+            foreach (var source in BuildEmailSources(html, document))
             {
-                allEmails.Add(email);
-                if (PecIdentifier.IsPec(email))
+                foreach (var email in EmailExtractor.Extract(source))
                 {
-                    allPecs.Add(email);
+                    allEmails.Add(email);
+                    if (PecIdentifier.IsPec(email))
+                    {
+                        allPecs.Add(email);
+                    }
                 }
             }
 
@@ -125,5 +128,48 @@ public sealed class WebScraperService
         }
 
         return new Uri(baseUri, path).ToString();
+    }
+
+    private static IEnumerable<string> BuildEmailSources(string html, AngleSharp.Dom.IDocument document)
+    {
+        yield return html;
+
+        var textContent = document.DocumentElement?.TextContent;
+        if (!string.IsNullOrWhiteSpace(textContent))
+        {
+            yield return textContent;
+        }
+
+        foreach (var mailto in ExtractMailtoCandidates(document))
+        {
+            yield return mailto;
+        }
+    }
+
+    private static IEnumerable<string> ExtractMailtoCandidates(AngleSharp.Dom.IDocument document)
+    {
+        foreach (var link in document.QuerySelectorAll("a[href^='mailto:']"))
+        {
+            var href = link.GetAttribute("href");
+            if (string.IsNullOrWhiteSpace(href) || href.Length <= "mailto:".Length)
+            {
+                continue;
+            }
+
+            var rawAddressList = href["mailto:".Length..].Split('?', 2, StringSplitOptions.TrimEntries)[0];
+            if (string.IsNullOrWhiteSpace(rawAddressList))
+            {
+                continue;
+            }
+
+            foreach (var address in rawAddressList.Split([',', ';'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+            {
+                var decoded = Uri.UnescapeDataString(address);
+                if (!string.IsNullOrWhiteSpace(decoded))
+                {
+                    yield return decoded;
+                }
+            }
+        }
     }
 }
