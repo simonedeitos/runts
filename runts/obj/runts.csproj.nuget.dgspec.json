@@ -69,10 +69,6 @@
             "Microsoft.Web.WebView2": {
               "target": "Package",
               "version": "[1.0.2903.40, )"
-            },
-            "itext7": {
-              "target": "Package",
-              "version": "[8.0.5, )"
             }
           },
           "imports": [
