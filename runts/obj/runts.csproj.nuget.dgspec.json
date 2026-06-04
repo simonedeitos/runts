@@ -10,7 +10,7 @@
         "projectUniqueName": "/tmp/workspace/simonedeitos/runts/runts/runts.csproj",
         "projectName": "runts",
         "projectPath": "/tmp/workspace/simonedeitos/runts/runts/runts.csproj",
-        "packagesPath": "/tmp/codeql-scratch-3bf94c9b5312e19f/dbs/csharp/working/packages",
+        "packagesPath": "/home/runner/.nuget/packages/",
         "outputPath": "/tmp/workspace/simonedeitos/runts/runts/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
@@ -69,6 +69,22 @@
             "Microsoft.Web.WebView2": {
               "target": "Package",
               "version": "[1.0.2903.40, )"
+            },
+            "Selenium.Support": {
+              "target": "Package",
+              "version": "[4.27.0, )"
+            },
+            "Selenium.WebDriver": {
+              "target": "Package",
+              "version": "[4.27.0, )"
+            },
+            "Selenium.WebDriver.ChromeDriver": {
+              "target": "Package",
+              "version": "[131.0.6778.8500, )"
+            },
+            "itext7": {
+              "target": "Package",
+              "version": "[8.0.5, )"
             }
           },
           "imports": [
@@ -83,18 +99,6 @@
           "assetTargetFallback": true,
           "warn": true,
           "downloadDependencies": [
-            {
-              "name": "Microsoft.AspNetCore.App.Ref",
-              "version": "[8.0.27, 8.0.27]"
-            },
-            {
-              "name": "Microsoft.NETCore.App.Host.linux-x64",
-              "version": "[8.0.27, 8.0.27]"
-            },
-            {
-              "name": "Microsoft.NETCore.App.Ref",
-              "version": "[8.0.27, 8.0.27]"
-            },
             {
               "name": "Microsoft.WindowsDesktop.App.Ref",
               "version": "[8.0.27, 8.0.27]"
