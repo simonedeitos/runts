@@ -159,11 +159,11 @@ partial class MainForm
         gridEnti.AllowUserToDeleteRows = false;
         gridEnti.ReadOnly = true;
 
-        toolTip.SetToolTip(cmbModalita, "Seleziona la modalità: RUNTS ufficiale oppure Pro Loco per comune");
+        toolTip.SetToolTip(cmbModalita, "Seleziona la modalità: RUNTS ufficiale, Pro Loco da albo PDF oppure Pro Loco per comune");
         toolTip.SetToolTip(cmbRegione, "Regione italiana da importare");
         toolTip.SetToolTip(numThread, "Numero massimo thread di lavoro (1-10)");
         toolTip.SetToolTip(numDelay, "Delay tra richieste HTTP in millisecondi");
-        toolTip.SetToolTip(btnImporta, "Importa enti registrati ufficialmente nel RUNTS o genera Pro Loco per tutti i comuni");
+        toolTip.SetToolTip(btnImporta, "Importa enti RUNTS reali, Pro Loco da albi regionali ufficiali PDF o Pro Loco generate dai comuni ISTAT");
 
         Controls.AddRange([
             lblModalita,

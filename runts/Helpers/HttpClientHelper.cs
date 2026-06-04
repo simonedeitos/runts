@@ -5,10 +5,13 @@ public static class HttpClientHelper
     private const string DefaultUserAgent = "RUNTS-Contact-Finder/1.0 (+https://github.com/simonedeitos/runts)";
 
     public static HttpClient CreateDefaultClient(IServiceProvider _)
+        => CreateClient(TimeSpan.FromSeconds(15));
+
+    public static HttpClient CreateClient(TimeSpan timeout)
     {
         var client = new HttpClient
         {
-            Timeout = TimeSpan.FromSeconds(15)
+            Timeout = timeout
         };
 
         var userAgent = Environment.GetEnvironmentVariable("RUNTS_USER_AGENT");

@@ -30,6 +30,7 @@ internal static class Program
         services.AddSingleton(HttpClientHelper.CreateDefaultClient);
         services.AddSingleton<LoggerService>();
         services.AddSingleton<CsvManager>();
+        services.AddSingleton<PdfProLocoImporter>();
         services.AddSingleton<RuntsImporter>();
         services.AddSingleton<SearchEngineService>();
         services.AddSingleton<WebScraperService>();
