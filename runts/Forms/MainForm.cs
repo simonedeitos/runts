@@ -2,7 +2,6 @@ using runts.Models;
 using runts.Services;
 using runts.Helpers;
 using System.ComponentModel;
-using OpenQA.Selenium;
 
 namespace runts.Forms;
 
@@ -32,6 +31,7 @@ public partial class MainForm : Form
         _exportService = exportService;
 
         InitializeComponent();
+        InitializeSettingsMenu();
 
         gridEnti.DataSource = _rows;
         btnImporta.Click += async (_, _) => await ImportRegioneAsync();
@@ -48,17 +48,8 @@ public partial class MainForm : Form
 
     private async Task LoadDataAsync()
     {
-        var (isInstalled, _, errorMsg) = ChromeAutomationHelper.VerifyChromeInstallation();
-        if (!isInstalled)
-        {
-            MessageBox.Show(
-                $"Google Chrome non è installato o non è accessibile.\n\n{errorMsg}\n\nL'applicazione può continuare ma la ricerca web automatica non funzionerà.\n\nScarica Chrome da: https://www.google.com/chrome/",
-                "Chrome Non Trovato",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
-        }
-
         cmbModalita.Items.Clear();
+        chkShowChrome.Visible = false;
         cmbModalita.Items.Add("RUNTS - Enti Terzo Settore Registrati");
         cmbModalita.Items.Add("Pro Loco - Albi Regionali Ufficiali (PDF)");
         cmbModalita.Items.Add("Pro Loco - Ricerca per Comune (ISTAT)");
@@ -118,41 +109,6 @@ public partial class MainForm : Form
         {
             MessageBox.Show("Elaborazione fermata.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
-        catch (WebDriverException ex) when (ex.Message.Contains("chromedriver", StringComparison.OrdinalIgnoreCase))
-        {
-            MessageBox.Show(
-                "ChromeDriver non compatibile con versione Chrome installata.\n\nAggiornare i package Selenium/ChromeDriver.",
-                "Driver Update",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
-        }
-        catch (WebDriverException ex) when (ex.Message.Contains("chrome", StringComparison.OrdinalIgnoreCase))
-        {
-            MessageBox.Show(
-                "Google Chrome non è installato o ChromeDriver non è compatibile.\n\nInstallare Chrome da: https://www.google.com/chrome/",
-                "Chrome Required",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("Chrome", StringComparison.OrdinalIgnoreCase))
-        {
-            MessageBox.Show(ex.Message, "Errore Avvio Chrome", MessageBoxButtons.OK, MessageBoxIcon.Error);
-
-            var result = MessageBox.Show(
-                "Vuoi continuare utilizzando il metodo di ricerca alternativo (senza Chrome)?\n\nNOTA: Il metodo alternativo è meno efficace ma non richiede Chrome.",
-                "Metodo Alternativo",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question);
-
-            if (result == DialogResult.Yes)
-            {
-                MessageBox.Show(
-                    "Fallback senza Chrome non ancora implementato.",
-                    Text,
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-            }
-        }
         catch (Exception ex)
         {
             MessageBox.Show(
@@ -161,6 +117,32 @@ public partial class MainForm : Form
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
         }
+    }
+
+    private void InitializeSettingsMenu()
+    {
+        var menuStrip = new MenuStrip
+        {
+            Dock = DockStyle.None,
+            Location = new Point(20, 0),
+            AutoSize = true
+        };
+
+        var menuSettings = new ToolStripMenuItem("Impostazioni");
+        var menuBrightData = new ToolStripMenuItem("Configura Bright Data API");
+        menuBrightData.Click += MenuBrightData_Click;
+
+        menuSettings.DropDownItems.Add(menuBrightData);
+        menuStrip.Items.Add(menuSettings);
+
+        Controls.Add(menuStrip);
+        MainMenuStrip = menuStrip;
+    }
+
+    private void MenuBrightData_Click(object? sender, EventArgs e)
+    {
+        using var settingsForm = new SettingsForm();
+        settingsForm.ShowDialog(this);
     }
 
     private async Task ExportCsvAsync()
