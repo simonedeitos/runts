@@ -10,7 +10,8 @@ namespace runts.Services;
 public enum ImportMode
 {
     Runts = 0,
-    ProLoco = 1
+    ProLocoAlbiPdf = 1,
+    ProLocoPerComune = 2
 }
 
 public sealed class RuntsImporter
@@ -18,24 +19,29 @@ public sealed class RuntsImporter
     private readonly CsvManager _csvManager;
     private readonly HttpClient _httpClient;
     private readonly LoggerService _logger;
+    private readonly PdfProLocoImporter _pdfProLocoImporter;
 
     private const string RuntsSearchUrl = "https://www.runts.it/ricerca-enti";
     private const string DatiGovSearchUrl = "https://www.dati.gov.it/api/3/action/package_search?q=runts+enti+terzo+settore&rows=25";
     private const string ComuniJsonUrl = "https://raw.githubusercontent.com/matteocontrini/comuni-json/master/comuni.json";
 
-    public RuntsImporter(CsvManager csvManager, HttpClient httpClient, LoggerService logger)
+    public RuntsImporter(CsvManager csvManager, HttpClient httpClient, LoggerService logger, PdfProLocoImporter pdfProLocoImporter)
     {
         _csvManager = csvManager;
         _httpClient = httpClient;
         _logger = logger;
+        _pdfProLocoImporter = pdfProLocoImporter;
     }
+
+    public IReadOnlyCollection<string> GetSupportedPdfRegions() => _pdfProLocoImporter.GetSupportedRegions();
 
     public async Task<int> ImportRegioneAsync(string regione, ImportMode mode, IProgress<string>? progress = null, CancellationToken cancellationToken = default)
     {
         var enti = mode switch
         {
             ImportMode.Runts => await ImportaEntiRealiDaRuntsAsync(regione, progress, cancellationToken),
-            ImportMode.ProLoco => await ImportaProLocoPerComuneAsync(regione, progress, cancellationToken),
+            ImportMode.ProLocoAlbiPdf => await _pdfProLocoImporter.ImportaDaPdfAlboRegionaleAsync(regione, progress, cancellationToken),
+            ImportMode.ProLocoPerComune => await ImportaProLocoPerComuneAsync(regione, progress, cancellationToken),
             _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Modalità di importazione non supportata.")
         };
 

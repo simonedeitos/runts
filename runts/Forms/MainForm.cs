@@ -9,11 +9,17 @@ namespace runts.Forms;
 /// </summary>
 public partial class MainForm : Form
 {
+    private static readonly string[] RegioniPredefinite =
+    [
+        "Abruzzo", "Basilicata", "Calabria", "Campania", "Emilia-Romagna", "Friuli-Venezia Giulia", "Lazio", "Liguria", "Lombardia", "Marche", "Molise", "Piemonte", "Puglia", "Sardegna", "Sicilia", "Toscana", "Trentino-Alto Adige", "Umbria", "Valle d'Aosta", "Veneto"
+    ];
+
     private readonly RuntsImporter _importer;
     private readonly CsvManager _csvManager;
     private readonly ContactFinderService _contactFinder;
     private readonly ExportService _exportService;
     private readonly BindingList<Ente> _rows = [];
+    private List<string> _regioniDisponibili = [];
     private CancellationTokenSource? _cts;
 
     public MainForm(RuntsImporter importer, CsvManager csvManager, ContactFinderService contactFinder, ExportService exportService)
@@ -33,6 +39,7 @@ public partial class MainForm : Form
         btnFerma.Click += (_, _) => _cts?.Cancel();
         btnExportCsv.Click += async (_, _) => await ExportCsvAsync();
         btnExportExcel.Click += async (_, _) => await ExportExcelAsync();
+        cmbModalita.SelectedIndexChanged += (_, _) => RefreshRegionOptions();
 
         Load += async (_, _) => await LoadDataAsync();
     }
@@ -41,26 +48,19 @@ public partial class MainForm : Form
     {
         cmbModalita.Items.Clear();
         cmbModalita.Items.Add("RUNTS - Enti Terzo Settore Registrati");
-        cmbModalita.Items.Add("Pro Loco - Ricerca per Comune");
+        cmbModalita.Items.Add("Pro Loco - Albi Regionali Ufficiali (PDF)");
+        cmbModalita.Items.Add("Pro Loco - Ricerca per Comune (ISTAT)");
         cmbModalita.SelectedIndex = cmbModalita.SelectedIndex < 0 ? 0 : cmbModalita.SelectedIndex;
 
         var all = await _csvManager.LoadAsync();
-        var regioni = all.Select(x => x.Regione).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
+        _regioniDisponibili = all.Select(x => x.Regione)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Concat(RegioniPredefinite)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x)
+            .ToList();
 
-        if (regioni.Count == 0)
-        {
-            regioni =
-            [
-                "Abruzzo", "Basilicata", "Calabria", "Campania", "Emilia-Romagna", "Friuli-Venezia Giulia", "Lazio", "Liguria", "Lombardia", "Marche", "Molise", "Piemonte", "Puglia", "Sardegna", "Sicilia", "Toscana", "Trentino-Alto Adige", "Umbria", "Valle d'Aosta", "Veneto"
-            ];
-        }
-
-        cmbRegione.Items.Clear();
-        cmbRegione.Items.AddRange(regioni.Cast<object>().ToArray());
-        if (cmbRegione.Items.Count > 0 && cmbRegione.SelectedIndex == -1)
-        {
-            cmbRegione.SelectedIndex = 0;
-        }
+        RefreshRegionOptions();
 
         await RefreshGridAsync();
     }
@@ -74,7 +74,7 @@ public partial class MainForm : Form
         lblFonte.Text = "Fonte dati: avvio importazione...";
         var imported = await _importer.ImportRegioneAsync(regione, importMode, progress);
         await RefreshGridAsync();
-        var modeLabel = importMode == ImportMode.Runts ? "RUNTS" : "Pro Loco";
+        var modeLabel = GetModeLabel(importMode);
         MessageBox.Show($"Importati {imported} record ({modeLabel}) per {regione}.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
@@ -177,13 +177,47 @@ public partial class MainForm : Form
 
     private ImportMode GetImportMode()
     {
-        if (cmbModalita.SelectedIndex == 1)
+        return cmbModalita.SelectedIndex switch
         {
-            return ImportMode.ProLoco;
+            1 => ImportMode.ProLocoAlbiPdf,
+            2 => ImportMode.ProLocoPerComune,
+            _ => ImportMode.Runts
+        };
+    }
+
+    private void RefreshRegionOptions()
+    {
+        var regioneSelezionata = cmbRegione.SelectedItem as string;
+        var regioni = GetImportMode() == ImportMode.ProLocoAlbiPdf
+            ? _importer.GetSupportedPdfRegions().OrderBy(x => x).ToList()
+            : _regioniDisponibili;
+
+        cmbRegione.Items.Clear();
+        cmbRegione.Items.AddRange(regioni.Cast<object>().ToArray());
+
+        if (!string.IsNullOrWhiteSpace(regioneSelezionata))
+        {
+            var index = regioni.FindIndex(x => x.Equals(regioneSelezionata, StringComparison.OrdinalIgnoreCase));
+            if (index >= 0)
+            {
+                cmbRegione.SelectedIndex = index;
+                return;
+            }
         }
 
-        return ImportMode.Runts;
+        if (cmbRegione.Items.Count > 0)
+        {
+            cmbRegione.SelectedIndex = 0;
+        }
     }
+
+    private static string GetModeLabel(ImportMode mode) => mode switch
+    {
+        ImportMode.Runts => "RUNTS",
+        ImportMode.ProLocoAlbiPdf => "Pro Loco da PDF",
+        ImportMode.ProLocoPerComune => "Pro Loco per Comune",
+        _ => "Import"
+    };
 
     private static string BuildEntityKey(Ente ente)
     {
