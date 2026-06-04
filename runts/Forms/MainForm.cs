@@ -1,5 +1,6 @@
 using runts.Models;
 using runts.Services;
+using runts.Helpers;
 using System.ComponentModel;
 using OpenQA.Selenium;
 
@@ -47,6 +48,16 @@ public partial class MainForm : Form
 
     private async Task LoadDataAsync()
     {
+        var (isInstalled, _, errorMsg) = ChromeAutomationHelper.VerifyChromeInstallation();
+        if (!isInstalled)
+        {
+            MessageBox.Show(
+                $"Google Chrome non è installato o non è accessibile.\n\n{errorMsg}\n\nL'applicazione può continuare ma la ricerca web automatica non funzionerà.\n\nScarica Chrome da: https://www.google.com/chrome/",
+                "Chrome Non Trovato",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+
         cmbModalita.Items.Clear();
         cmbModalita.Items.Add("RUNTS - Enti Terzo Settore Registrati");
         cmbModalita.Items.Add("Pro Loco - Albi Regionali Ufficiali (PDF)");
@@ -125,7 +136,30 @@ public partial class MainForm : Form
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("Chrome", StringComparison.OrdinalIgnoreCase))
         {
-            MessageBox.Show(ex.Message, "Errore Chrome", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(ex.Message, "Errore Avvio Chrome", MessageBoxButtons.OK, MessageBoxIcon.Error);
+
+            var result = MessageBox.Show(
+                "Vuoi continuare utilizzando il metodo di ricerca alternativo (senza Chrome)?\n\nNOTA: Il metodo alternativo è meno efficace ma non richiede Chrome.",
+                "Metodo Alternativo",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (result == DialogResult.Yes)
+            {
+                MessageBox.Show(
+                    "Fallback senza Chrome non ancora implementato.",
+                    Text,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                    $"Errore durante l'elaborazione:\n\n{ex.Message}",
+                    "Errore",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
         }
     }
 

@@ -2,6 +2,10 @@ using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium.Support.UI;
 using runts.Services;
+using System.Diagnostics;
+using System.Text;
+using WebDriverManager;
+using WebDriverManager.DriverConfigs.Impl;
 
 namespace runts.Helpers;
 
@@ -205,12 +209,54 @@ public sealed class ChromeAutomationHelper : IDisposable
 
     private WebDriverWait Wait => _wait ?? throw new ObjectDisposedException(nameof(ChromeAutomationHelper));
 
+    public static (bool isInstalled, string? chromePath, string? errorMessage) VerifyChromeInstallation()
+    {
+        var chromeExe = GetChromeExecutablePath();
+        if (string.IsNullOrWhiteSpace(chromeExe))
+        {
+            return (false, null, "Google Chrome non è installato in paths standard.");
+        }
+
+        try
+        {
+            var versionInfo = FileVersionInfo.GetVersionInfo(chromeExe);
+            var version = versionInfo.FileVersion;
+            return (true, chromeExe, string.IsNullOrWhiteSpace(version) ? null : $"Versione Chrome rilevata: {version}");
+        }
+        catch (Exception ex)
+        {
+            return (false, chromeExe, $"Impossibile leggere versione Chrome: {ex.Message}");
+        }
+    }
+
     private void InitializeDriver(bool headless)
     {
+        _logger.LogAsync("═══════════════════════════════════════").GetAwaiter().GetResult();
+        _logger.LogAsync("  INIZIALIZZAZIONE CHROME AUTOMATION  ").GetAwaiter().GetResult();
+        _logger.LogAsync("═══════════════════════════════════════").GetAwaiter().GetResult();
+
+        _logger.LogAsync("[1/4] Rilevamento Chrome installato...").GetAwaiter().GetResult();
         var options = new ChromeOptions();
+        var chromeExe = GetChromeExecutablePath();
+        if (!string.IsNullOrWhiteSpace(chromeExe))
+        {
+            options.BinaryLocation = chromeExe;
+            _logger.LogAsync($"✓ Chrome trovato: {chromeExe}").GetAwaiter().GetResult();
+        }
+        else
+        {
+            _logger.LogAsync("⚠ Chrome non trovato in paths standard").GetAwaiter().GetResult();
+        }
+
+        _logger.LogAsync("[2/4] Configurazione opzioni Chrome...").GetAwaiter().GetResult();
         if (headless)
         {
             options.AddArgument("--headless=new");
+            _logger.LogAsync("✓ Modalità headless attivata").GetAwaiter().GetResult();
+        }
+        else
+        {
+            _logger.LogAsync("✓ Modalità visibile attivata").GetAwaiter().GetResult();
         }
 
         options.AddArgument("--disable-blink-features=AutomationControlled");
@@ -228,17 +274,86 @@ public sealed class ChromeAutomationHelper : IDisposable
 
         try
         {
+            _logger.LogAsync("[3/4] Setup ChromeDriver automatico...").GetAwaiter().GetResult();
+            new DriverManager().SetUpDriver(new ChromeConfig());
+            _logger.LogAsync("✓ ChromeDriver configurato correttamente").GetAwaiter().GetResult();
+
+            _logger.LogAsync("[4/4] Avvio sessione Chrome...").GetAwaiter().GetResult();
             _driver = new ChromeDriver(options);
             _driver.Manage().Timeouts().PageLoad = TimeSpan.FromSeconds(30);
             _driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(5);
             _wait = new WebDriverWait(_driver, TimeSpan.FromSeconds(15));
-            _logger.LogAsync($"Sessione Chrome inizializzata (Headless: {headless})").GetAwaiter().GetResult();
+            _logger.LogAsync($"✓ Sessione Chrome inizializzata con successo (Headless: {headless})").GetAwaiter().GetResult();
+            _logger.LogAsync("✓ Chrome pronto per l'automazione!").GetAwaiter().GetResult();
+        }
+        catch (WebDriverException ex)
+        {
+            var errorMsg = BuildDetailedErrorMessage(ex, chromeExe);
+            _logger.LogAsync($"❌ ERRORE WebDriver: {ex.Message}").GetAwaiter().GetResult();
+            _logger.LogAsync(errorMsg).GetAwaiter().GetResult();
+            throw new InvalidOperationException(errorMsg, ex);
         }
         catch (Exception ex)
         {
-            _logger.LogAsync($"ERRORE inizializzazione Chrome: {ex.Message}").GetAwaiter().GetResult();
-            throw new InvalidOperationException("Impossibile avviare Chrome. Verificare installazione Chrome e ChromeDriver.", ex);
+            var errorMsg = BuildDetailedErrorMessage(ex, chromeExe);
+            _logger.LogAsync($"❌ ERRORE inizializzazione Chrome: {ex.Message}").GetAwaiter().GetResult();
+            _logger.LogAsync(errorMsg).GetAwaiter().GetResult();
+            throw new InvalidOperationException(errorMsg, ex);
         }
+    }
+
+    private static string? GetChromeExecutablePath()
+    {
+        var chromePaths = new[]
+        {
+            @"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            @"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Google\Chrome\Application\chrome.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Google\Chrome\Application\chrome.exe"),
+            "/usr/bin/google-chrome",
+            "/usr/bin/google-chrome-stable",
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        };
+
+        return chromePaths.FirstOrDefault(File.Exists);
+    }
+
+    private static string BuildDetailedErrorMessage(Exception ex, string? chromeExePath)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("═══════════════════════════════════════════════════");
+        sb.AppendLine("ERRORE AVVIO GOOGLE CHROME");
+        sb.AppendLine("═══════════════════════════════════════════════════");
+        sb.AppendLine();
+        sb.AppendLine("DETTAGLI ERRORE:");
+        sb.AppendLine($"  {ex.Message}");
+        sb.AppendLine();
+        sb.AppendLine("DIAGNOSTICA:");
+        sb.AppendLine($"  Chrome installato: {(string.IsNullOrEmpty(chromeExePath) ? "❌ NO" : $"✓ {chromeExePath}")}");
+        sb.AppendLine($"  Directory applicazione: {AppDomain.CurrentDomain.BaseDirectory}");
+        sb.AppendLine($"  Sistema operativo: {Environment.OSVersion}");
+        sb.AppendLine($"  .NET Runtime: {Environment.Version}");
+        sb.AppendLine();
+        sb.AppendLine("POSSIBILI CAUSE:");
+        sb.AppendLine("  1. Chrome non installato o versione troppo vecchia");
+        sb.AppendLine("  2. ChromeDriver incompatibile (WebDriverManager dovrebbe risolvere)");
+        sb.AppendLine("  3. Antivirus/Firewall blocca l'esecuzione");
+        sb.AppendLine("  4. Permessi insufficienti (provare come Amministratore)");
+        sb.AppendLine("  5. Processo Chrome già in esecuzione in modalità incompatibile");
+        sb.AppendLine();
+        sb.AppendLine("SOLUZIONI:");
+        sb.AppendLine("  1. Aggiorna Google Chrome all'ultima versione");
+        sb.AppendLine("     Download: https://www.google.com/chrome/");
+        sb.AppendLine("  2. Esegui l'applicazione come Amministratore");
+        sb.AppendLine("  3. Disabilita temporaneamente antivirus/firewall");
+        sb.AppendLine("  4. Chiudi tutte le finestre Chrome aperte");
+        sb.AppendLine("  5. Riavvia il computer");
+        sb.AppendLine();
+        sb.AppendLine("Se il problema persiste, contatta il supporto tecnico");
+        sb.AppendLine("con il log completo presente in Data\\Logs\\");
+        sb.AppendLine("═══════════════════════════════════════════════════");
+
+        return sb.ToString();
     }
 
     private static IEnumerable<string> GetPagesToScan(string baseUrl)
