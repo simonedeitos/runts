@@ -5517,7 +5517,7 @@
     ]
   },
   "packageFolders": {
-    "/tmp/codeql-scratch-3bf94c9b5312e19f/dbs/csharp/working/packages": {}
+    "/home/runner/.nuget/packages/": {}
   },
   "project": {
     "version": "1.0.0",
@@ -5525,7 +5525,7 @@
       "projectUniqueName": "/tmp/workspace/simonedeitos/runts/runts/runts.csproj",
       "projectName": "runts",
       "projectPath": "/tmp/workspace/simonedeitos/runts/runts/runts.csproj",
-      "packagesPath": "/tmp/codeql-scratch-3bf94c9b5312e19f/dbs/csharp/working/packages",
+      "packagesPath": "/home/runner/.nuget/packages/",
       "outputPath": "/tmp/workspace/simonedeitos/runts/runts/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
@@ -5618,18 +5618,6 @@
         "assetTargetFallback": true,
         "warn": true,
         "downloadDependencies": [
-          {
-            "name": "Microsoft.AspNetCore.App.Ref",
-            "version": "[8.0.27, 8.0.27]"
-          },
-          {
-            "name": "Microsoft.NETCore.App.Host.linux-x64",
-            "version": "[8.0.27, 8.0.27]"
-          },
-          {
-            "name": "Microsoft.NETCore.App.Ref",
-            "version": "[8.0.27, 8.0.27]"
-          },
           {
             "name": "Microsoft.WindowsDesktop.App.Ref",
             "version": "[8.0.27, 8.0.27]"

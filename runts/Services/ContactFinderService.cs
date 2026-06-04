@@ -1,6 +1,5 @@
 using runts.Models;
 using System.Threading.Channels;
-using OpenQA.Selenium;
 
 namespace runts.Services;
 
@@ -112,14 +111,6 @@ public sealed class ContactFinderService
             }
         }
         catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("Chrome", StringComparison.OrdinalIgnoreCase))
-        {
-            throw;
-        }
-        catch (WebDriverException ex) when (ex.Message.Contains("chrome", StringComparison.OrdinalIgnoreCase) || ex.Message.Contains("chromedriver", StringComparison.OrdinalIgnoreCase))
         {
             throw;
         }

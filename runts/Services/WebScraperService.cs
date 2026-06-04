@@ -1,10 +1,9 @@
-using OpenQA.Selenium;
 using runts.Helpers;
 
 namespace runts.Services;
 
 /// <summary>
-/// Servizio scraping siti web tramite Chrome automation.
+/// Servizio scraping siti web tramite Bright Data Web Unlocker.
 /// </summary>
 public sealed class WebScraperService
 {
@@ -32,22 +31,32 @@ public sealed class WebScraperService
 
         try
         {
-            using var chrome = new ChromeAutomationHelper(_logger, headless);
+            using var brightData = new BrightDataSearchService(_logger);
             await _logger.LogAsync($"Scansione sito: {baseUrl}", cancellationToken);
-            var (emails, phones) = await chrome.ScanWebsiteForContactsAsync(baseUrl, delayMs, cancellationToken);
-
-            foreach (var email in emails)
+            foreach (var pageUrl in GetPagesToScan(baseUrl))
             {
-                allEmails.Add(email);
-                if (PecIdentifier.IsPec(email))
+                cancellationToken.ThrowIfCancellationRequested();
+                var html = await brightData.FetchPageAsync(pageUrl, cancellationToken);
+                if (string.IsNullOrWhiteSpace(html))
                 {
-                    allPecs.Add(email);
+                    continue;
                 }
-            }
 
-            foreach (var phone in phones)
-            {
-                allPhones.Add(phone);
+                foreach (var email in EmailExtractor.Extract(html))
+                {
+                    allEmails.Add(email);
+                    if (PecIdentifier.IsPec(email))
+                    {
+                        allPecs.Add(email);
+                    }
+                }
+
+                allPhones.UnionWith(PhoneExtractor.Extract(html));
+
+                if (delayMs > 0)
+                {
+                    await Task.Delay(delayMs, cancellationToken);
+                }
             }
 
             await _logger.LogAsync(
@@ -58,15 +67,26 @@ public sealed class WebScraperService
         {
             throw;
         }
-        catch (WebDriverException ex)
-        {
-            await _logger.LogAsync($"Errore Selenium scansione {baseUrl}: {ex.Message}", cancellationToken);
-        }
         catch (Exception ex)
         {
             await _logger.LogAsync($"Errore scansione {baseUrl}: {ex.Message}", cancellationToken);
         }
 
         return (allEmails.ToArray(), allPecs.ToArray(), allPhones.ToArray());
+    }
+
+    private static IEnumerable<string> GetPagesToScan(string baseUrl)
+    {
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
+        {
+            yield break;
+        }
+
+        var root = uri.GetLeftPart(UriPartial.Authority);
+        var paths = new[] { "/", "/contatti", "/contact", "/chi-siamo", "/about", "/staff", "/privacy", "/footer" };
+        foreach (var path in paths)
+        {
+            yield return new Uri(new Uri(root), path).ToString();
+        }
     }
 }
