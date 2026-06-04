@@ -39,6 +39,11 @@ public partial class MainForm : Form
 
     private async Task LoadDataAsync()
     {
+        cmbModalita.Items.Clear();
+        cmbModalita.Items.Add("RUNTS - Enti Terzo Settore Registrati");
+        cmbModalita.Items.Add("Pro Loco - Ricerca per Comune");
+        cmbModalita.SelectedIndex = cmbModalita.SelectedIndex < 0 ? 0 : cmbModalita.SelectedIndex;
+
         var all = await _csvManager.LoadAsync();
         var regioni = all.Select(x => x.Regione).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
 
@@ -63,9 +68,14 @@ public partial class MainForm : Form
     private async Task ImportRegioneAsync()
     {
         var regione = GetRegione();
-        var imported = await _importer.ImportRegioneAsync(regione);
+        var importMode = GetImportMode();
+        var progress = new Progress<string>(message => lblFonte.Text = $"Fonte dati: {message}");
+
+        lblFonte.Text = "Fonte dati: avvio importazione...";
+        var imported = await _importer.ImportRegioneAsync(regione, importMode, progress);
         await RefreshGridAsync();
-        MessageBox.Show($"Importati {imported} enti per {regione}.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+        var modeLabel = importMode == ImportMode.Runts ? "RUNTS" : "Pro Loco";
+        MessageBox.Show($"Importati {imported} record ({modeLabel}) per {regione}.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private async Task AvviaRicercaAsync()
@@ -136,7 +146,8 @@ public partial class MainForm : Form
     {
         if (ente is not null)
         {
-            var index = _rows.ToList().FindIndex(x => x.CodiceFiscale.Equals(ente.CodiceFiscale, StringComparison.OrdinalIgnoreCase));
+            var key = BuildEntityKey(ente);
+            var index = _rows.ToList().FindIndex(x => BuildEntityKey(x).Equals(key, StringComparison.OrdinalIgnoreCase));
             if (index >= 0)
             {
                 _rows[index] = ente;
@@ -162,5 +173,25 @@ public partial class MainForm : Form
         }
 
         return regione;
+    }
+
+    private ImportMode GetImportMode()
+    {
+        if (cmbModalita.SelectedIndex == 1)
+        {
+            return ImportMode.ProLoco;
+        }
+
+        return ImportMode.Runts;
+    }
+
+    private static string BuildEntityKey(Ente ente)
+    {
+        if (!string.IsNullOrWhiteSpace(ente.CodiceFiscale))
+        {
+            return $"CF:{ente.CodiceFiscale.Trim().ToUpperInvariant()}";
+        }
+
+        return $"ALT:{ente.Regione.Trim().ToUpperInvariant()}|{ente.Comune.Trim().ToUpperInvariant()}|{ente.Categoria.Trim().ToUpperInvariant()}";
     }
 }

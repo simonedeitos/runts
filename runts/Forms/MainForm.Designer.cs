@@ -4,6 +4,7 @@ namespace runts.Forms;
 partial class MainForm
 {
     private System.ComponentModel.IContainer components = null;
+    private ComboBox cmbModalita = null!;
     private ComboBox cmbRegione = null!;
     private Button btnImporta = null!;
     private Button btnAvvia = null!;
@@ -20,6 +21,7 @@ partial class MainForm
     private Label lblEmail = null!;
     private Label lblPec = null!;
     private Label lblErrori = null!;
+    private Label lblFonte = null!;
     private ProgressBar progressBar = null!;
     private DataGridView gridEnti = null!;
 
@@ -37,6 +39,7 @@ partial class MainForm
     private void InitializeComponent()
     {
         components = new System.ComponentModel.Container();
+        cmbModalita = new ComboBox();
         cmbRegione = new ComboBox();
         btnImporta = new Button();
         btnAvvia = new Button();
@@ -53,8 +56,10 @@ partial class MainForm
         lblEmail = new Label();
         lblPec = new Label();
         lblErrori = new Label();
+        lblFonte = new Label();
         progressBar = new ProgressBar();
         gridEnti = new DataGridView();
+        var lblModalita = new Label();
         var lblThread = new Label();
         var lblDelay = new Label();
         var toolTip = new ToolTip(components);
@@ -66,36 +71,44 @@ partial class MainForm
         MinimumSize = new Size(1024, 700);
         StartPosition = FormStartPosition.CenterScreen;
 
+        lblModalita.Text = "Modalità importazione";
+        lblModalita.Location = new Point(20, 22);
+        lblModalita.Size = new Size(130, 24);
+
+        cmbModalita.DropDownStyle = ComboBoxStyle.DropDownList;
+        cmbModalita.Location = new Point(160, 20);
+        cmbModalita.Size = new Size(280, 28);
+
         cmbRegione.DropDownStyle = ComboBoxStyle.DropDownList;
-        cmbRegione.Location = new Point(20, 20);
-        cmbRegione.Size = new Size(220, 28);
+        cmbRegione.Location = new Point(450, 20);
+        cmbRegione.Size = new Size(190, 28);
 
         btnImporta.Text = "Importa Regione";
-        btnImporta.Location = new Point(255, 18);
+        btnImporta.Location = new Point(650, 18);
         btnImporta.Size = new Size(130, 32);
 
         btnAvvia.Text = "Avvia Ricerca";
-        btnAvvia.Location = new Point(400, 18);
+        btnAvvia.Location = new Point(790, 18);
         btnAvvia.Size = new Size(120, 32);
 
         btnPausa.Text = "Pausa";
-        btnPausa.Location = new Point(530, 18);
-        btnPausa.Size = new Size(90, 32);
+        btnPausa.Location = new Point(920, 18);
+        btnPausa.Size = new Size(80, 32);
 
         btnRiprendi.Text = "Riprendi";
-        btnRiprendi.Location = new Point(630, 18);
-        btnRiprendi.Size = new Size(90, 32);
+        btnRiprendi.Location = new Point(1010, 18);
+        btnRiprendi.Size = new Size(80, 32);
 
         btnFerma.Text = "Ferma";
-        btnFerma.Location = new Point(730, 18);
-        btnFerma.Size = new Size(90, 32);
+        btnFerma.Location = new Point(1100, 18);
+        btnFerma.Size = new Size(80, 32);
 
         btnExportCsv.Text = "Esporta CSV Regione";
-        btnExportCsv.Location = new Point(830, 18);
+        btnExportCsv.Location = new Point(510, 58);
         btnExportCsv.Size = new Size(160, 32);
 
         btnExportExcel.Text = "Esporta Excel Regione";
-        btnExportExcel.Location = new Point(1000, 18);
+        btnExportExcel.Location = new Point(680, 58);
         btnExportExcel.Size = new Size(170, 32);
 
         lblThread.Text = "Numero Thread";
@@ -122,31 +135,39 @@ partial class MainForm
         progressBar.Location = new Point(20, 95);
         progressBar.Size = new Size(1150, 22);
 
-        lblTotale.Location = new Point(20, 128);
+        lblFonte.Location = new Point(20, 122);
+        lblFonte.Size = new Size(1150, 24);
+
+        lblTotale.Location = new Point(20, 148);
         lblTotale.Size = new Size(170, 24);
-        lblElaborati.Location = new Point(200, 128);
+        lblElaborati.Location = new Point(200, 148);
         lblElaborati.Size = new Size(170, 24);
-        lblSiti.Location = new Point(380, 128);
+        lblSiti.Location = new Point(380, 148);
         lblSiti.Size = new Size(170, 24);
-        lblEmail.Location = new Point(560, 128);
+        lblEmail.Location = new Point(560, 148);
         lblEmail.Size = new Size(170, 24);
-        lblPec.Location = new Point(740, 128);
+        lblPec.Location = new Point(740, 148);
         lblPec.Size = new Size(170, 24);
-        lblErrori.Location = new Point(920, 128);
+        lblErrori.Location = new Point(920, 148);
         lblErrori.Size = new Size(170, 24);
 
-        gridEnti.Location = new Point(20, 160);
-        gridEnti.Size = new Size(1235, 570);
+        gridEnti.Location = new Point(20, 182);
+        gridEnti.Size = new Size(1235, 548);
         gridEnti.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         gridEnti.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         gridEnti.AllowUserToAddRows = false;
         gridEnti.AllowUserToDeleteRows = false;
         gridEnti.ReadOnly = true;
 
+        toolTip.SetToolTip(cmbModalita, "Seleziona la modalità: RUNTS ufficiale oppure Pro Loco per comune");
+        toolTip.SetToolTip(cmbRegione, "Regione italiana da importare");
         toolTip.SetToolTip(numThread, "Numero massimo thread di lavoro (1-10)");
         toolTip.SetToolTip(numDelay, "Delay tra richieste HTTP in millisecondi");
+        toolTip.SetToolTip(btnImporta, "Importa enti registrati ufficialmente nel RUNTS o genera Pro Loco per tutti i comuni");
 
         Controls.AddRange([
+            lblModalita,
+            cmbModalita,
             cmbRegione,
             btnImporta,
             btnAvvia,
@@ -160,6 +181,7 @@ partial class MainForm
             lblDelay,
             numDelay,
             progressBar,
+            lblFonte,
             lblTotale,
             lblElaborati,
             lblSiti,
