@@ -10,6 +10,8 @@ namespace runts.Forms;
 /// </summary>
 public partial class MainForm : Form
 {
+    private const string TutteLeRegioniLabel = "Tutte le regioni";
+
     private static readonly string[] RegioniPredefinite =
     [
         "Abruzzo", "Basilicata", "Calabria", "Campania", "Emilia-Romagna", "Friuli-Venezia Giulia", "Lazio", "Liguria", "Lombardia", "Marche", "Molise", "Piemonte", "Puglia", "Sardegna", "Sicilia", "Toscana", "Trentino-Alto Adige", "Umbria", "Valle d'Aosta", "Veneto"
@@ -19,16 +21,29 @@ public partial class MainForm : Form
     private readonly CsvManager _csvManager;
     private readonly ContactFinderService _contactFinder;
     private readonly ExportService _exportService;
+    private readonly LoggerService _logger;
+    private readonly IstatComuniImporter _istatComuniImporter;
+    private readonly WebScraperService _webScraperService;
     private readonly BindingList<Ente> _rows = [];
     private List<string> _regioniDisponibili = [];
     private CancellationTokenSource? _cts;
 
-    public MainForm(RuntsImporter importer, CsvManager csvManager, ContactFinderService contactFinder, ExportService exportService)
+    public MainForm(
+        RuntsImporter importer,
+        CsvManager csvManager,
+        ContactFinderService contactFinder,
+        ExportService exportService,
+        LoggerService logger,
+        IstatComuniImporter istatComuniImporter,
+        WebScraperService webScraperService)
     {
         _importer = importer;
         _csvManager = csvManager;
         _contactFinder = contactFinder;
         _exportService = exportService;
+        _logger = logger;
+        _istatComuniImporter = istatComuniImporter;
+        _webScraperService = webScraperService;
 
         InitializeComponent();
         InitializeSettingsMenu();
@@ -41,7 +56,12 @@ public partial class MainForm : Form
         btnFerma.Click += (_, _) => _cts?.Cancel();
         btnExportCsv.Click += async (_, _) => await ExportCsvAsync();
         btnExportExcel.Click += async (_, _) => await ExportExcelAsync();
-        cmbModalita.SelectedIndexChanged += (_, _) => RefreshRegionOptions();
+        btnBrowseCsvComuni.Click += BtnBrowseCsvComuni_Click;
+        cmbModalita.SelectedIndexChanged += (_, _) =>
+        {
+            RefreshRegionOptions();
+            UpdateComuneModeUi();
+        };
         SetProcessingControls(isProcessing: false);
 
         Load += async (_, _) => await LoadDataAsync();
@@ -65,25 +85,46 @@ public partial class MainForm : Form
             .ToList();
 
         RefreshRegionOptions();
+        UpdateComuneModeUi();
 
         await RefreshGridAsync();
     }
 
     private async Task ImportRegioneAsync()
     {
-        var regione = GetRegione();
-        var importMode = GetImportMode();
-        var progress = new Progress<string>(message => lblFonte.Text = $"Fonte dati: {message}");
+        try
+        {
+            var importMode = GetImportMode();
+            var progress = new Progress<string>(message => lblFonte.Text = $"Fonte dati: {message}");
 
-        lblFonte.Text = "Fonte dati: avvio importazione...";
-        var imported = await _importer.ImportRegioneAsync(regione, importMode, progress);
-        await RefreshGridAsync();
-        var modeLabel = GetModeLabel(importMode);
-        MessageBox.Show($"Importati {imported} record ({modeLabel}) per {regione}.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            lblFonte.Text = "Fonte dati: avvio importazione...";
+            var regione = GetRegione();
+            var imported = importMode == ImportMode.ProLocoPerComune
+                ? await ImportComuniIstatAsync(GetCsvComuniPath(), regione)
+                : await _importer.ImportRegioneAsync(regione, importMode, progress);
+
+            await RefreshGridAsync();
+            var modeLabel = GetModeLabel(importMode);
+            MessageBox.Show($"Importati {imported} record ({modeLabel}) per {regione}.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Errore durante l'importazione:\n\n{ex.Message}",
+                "Errore",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
     }
 
     private async Task AvviaRicercaAsync()
     {
+        if (GetImportMode() == ImportMode.ProLocoPerComune)
+        {
+            await AvviaRicercaComuniAsync();
+            return;
+        }
+
         var regione = GetRegione();
         var outputFile = GetOutputCsvPath();
         if (string.IsNullOrWhiteSpace(outputFile))
@@ -140,6 +181,52 @@ public partial class MainForm : Form
         }
     }
 
+    private async Task AvviaRicercaComuniAsync()
+    {
+        var csvPath = GetCsvComuniPath();
+        var regione = GetRegione();
+        var outputFile = GetOutputCsvPath();
+        if (string.IsNullOrWhiteSpace(outputFile))
+        {
+            return;
+        }
+
+        _cts?.Cancel();
+        _cts = new CancellationTokenSource();
+
+        try
+        {
+            var headless = !chkShowChrome.Checked;
+            SetProcessingControls(isProcessing: true);
+            await Task.Run(
+                () => ProcessComuniAsync(csvPath, regione, outputFile, (int)numDelay.Value, headless, _cts.Token),
+                _cts.Token);
+            await RefreshGridAsync();
+
+            MessageBox.Show(
+                $"Ricerca completata.\n\nRisultati salvati in:\n{outputFile}",
+                Text,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (OperationCanceledException)
+        {
+            MessageBox.Show("Elaborazione fermata.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Errore durante l'elaborazione:\n\n{ex.Message}",
+                "Errore",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+        finally
+        {
+            SetProcessingControls(isProcessing: false);
+        }
+    }
+
     private void InitializeSettingsMenu()
     {
         var menuStrip = new MenuStrip
@@ -182,7 +269,9 @@ public partial class MainForm : Form
     {
         var regione = GetRegione();
         var all = await _csvManager.LoadAsync();
-        var filtered = all.Where(x => x.Regione.Equals(regione, StringComparison.OrdinalIgnoreCase)).ToList();
+        var filtered = IsTutteLeRegioni(regione)
+            ? all
+            : all.Where(x => x.Regione.Equals(regione, StringComparison.OrdinalIgnoreCase)).ToList();
 
         _rows.Clear();
         foreach (var row in filtered)
@@ -251,6 +340,11 @@ public partial class MainForm : Form
             ? _importer.GetSupportedPdfRegions().OrderBy(x => x).ToList()
             : _regioniDisponibili;
 
+        if (GetImportMode() == ImportMode.ProLocoPerComune)
+        {
+            regioni = [TutteLeRegioniLabel, .. RegioniPredefinite];
+        }
+
         cmbRegione.Items.Clear();
         cmbRegione.Items.AddRange(regioni.Cast<object>().ToArray());
 
@@ -290,11 +384,15 @@ public partial class MainForm : Form
 
     private string GetOutputCsvPath()
     {
+        var regione = cmbRegione.SelectedItem as string ?? "Italia";
+        var isComuniMode = GetImportMode() == ImportMode.ProLocoPerComune;
         using var dialog = new SaveFileDialog
         {
             Filter = "CSV files (*.csv)|*.csv",
-            FileName = $"runts_contatti_{DateTime.Now:yyyyMMdd_HHmmss}.csv",
-            Title = "Salva risultati ricerca contatti",
+            FileName = isComuniMode
+                ? $"proloco_comuni_{SanitizeFilePart(regione)}_{DateTime.Now:yyyyMMdd_HHmmss}.csv"
+                : $"runts_contatti_{DateTime.Now:yyyyMMdd_HHmmss}.csv",
+            Title = isComuniMode ? "Salva risultati ricerca comuni" : "Salva risultati ricerca contatti",
             InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
         };
 
@@ -312,6 +410,204 @@ public partial class MainForm : Form
         chkShowChrome.Enabled = !isProcessing;
         numThread.Enabled = !isProcessing;
         numDelay.Enabled = !isProcessing;
+        txtCsvComuni.Enabled = !isProcessing;
+        btnBrowseCsvComuni.Enabled = !isProcessing;
         btnFerma.Enabled = isProcessing;
     }
+
+    private async Task<int> ImportComuniIstatAsync(string csvPath, string regione, CancellationToken cancellationToken = default)
+    {
+        var comuni = await _istatComuniImporter.LoadComuniAsync(csvPath, cancellationToken);
+        if (!IsTutteLeRegioni(regione))
+        {
+            comuni = _istatComuniImporter.FilterByRegione(comuni, regione);
+        }
+
+        var enti = comuni.Select(CreateEnteFromComune).ToList();
+        await _csvManager.CreateBackupAsync("import_istatcomuni", cancellationToken);
+        await _csvManager.UpsertManyAsync(enti, cancellationToken);
+        return enti.Count;
+    }
+
+    private async Task ProcessComuniAsync(string csvPath, string regione, string outputFile, int delayMs, bool headless, CancellationToken cancellationToken)
+    {
+        var comuni = await _istatComuniImporter.LoadComuniAsync(csvPath, cancellationToken);
+        if (!IsTutteLeRegioni(regione))
+        {
+            comuni = _istatComuniImporter.FilterByRegione(comuni, regione);
+        }
+
+        var enti = comuni.Select(CreateEnteFromComune).ToList();
+        await _csvManager.CreateBackupAsync("ricercacomuni", cancellationToken);
+        await _csvManager.UpsertManyAsync(enti, cancellationToken);
+
+        SafeUiInvoke(() =>
+        {
+            _rows.Clear();
+            foreach (var ente in enti)
+            {
+                _rows.Add(ente);
+            }
+
+            lblFonte.Text = $"Fonte dati: CSV ISTAT ({Path.GetFileName(csvPath)})";
+            ApplyProgress(null, new EnteStatistiche { TotaleEnti = enti.Count });
+        });
+
+        using var puppeteer = new PuppeteerHelper(_logger, headless);
+        await puppeteer.InitializeAsync(cancellationToken);
+        var comuniSearchEngine = new ComuniSearchEngine(_logger, puppeteer);
+        await using var csvWriter = new CsvWriterService(outputFile);
+
+        var stats = new EnteStatistiche { TotaleEnti = enti.Count };
+        for (var index = 0; index < comuni.Count; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var comune = comuni[index];
+            var ente = enti[index];
+
+            try
+            {
+                SafeUiInvoke(() => lblFonte.Text = $"Fonte dati: [{index + 1}/{comuni.Count}] {comune.Nome} ({comune.SiglaProvincia})");
+                ente.SitoWeb = await comuniSearchEngine.FindProLocoForComuneAsync(comune, cancellationToken);
+                ente.Stato = string.IsNullOrWhiteSpace(ente.SitoWeb) ? StatoEnte.DA_ELABORARE : StatoEnte.SITO_TROVATO;
+
+                if (!string.IsNullOrWhiteSpace(ente.SitoWeb))
+                {
+                    var result = await _webScraperService.AnalyzeAsync(ente.SitoWeb, delayMs, headless, cancellationToken);
+                    if (result.emails.Count > 0)
+                    {
+                        ente.Email = string.Join(';', result.emails);
+                        ente.Stato = StatoEnte.EMAIL_TROVATA;
+                    }
+
+                    if (result.pecs.Count > 0)
+                    {
+                        ente.PEC = string.Join(';', result.pecs);
+                    }
+
+                    if (result.phones.Count > 0)
+                    {
+                        ente.Telefono = string.Join(';', result.phones);
+                    }
+                }
+
+                ente.DataUltimoControllo = DateTime.Now;
+                ente.Stato = ente.Stato == StatoEnte.ERRORE ? StatoEnte.ERRORE : StatoEnte.COMPLETATO;
+                await _csvManager.UpdateAsync(ente, cancellationToken);
+                await csvWriter.WriteRowAsync(ente, cancellationToken);
+
+                stats.Elaborati++;
+                if (!string.IsNullOrWhiteSpace(ente.SitoWeb)) stats.SitiTrovati++;
+                if (!string.IsNullOrWhiteSpace(ente.Email)) stats.EmailTrovate++;
+                if (!string.IsNullOrWhiteSpace(ente.PEC)) stats.PecTrovate++;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                ente.Stato = StatoEnte.ERRORE;
+                ente.DataUltimoControllo = DateTime.Now;
+                await _csvManager.UpdateAsync(ente, cancellationToken);
+                await csvWriter.WriteRowAsync(ente, cancellationToken);
+                await _logger.LogAsync($"Errore comune {comune.Nome}: {ex.Message}", cancellationToken);
+
+                stats.Elaborati++;
+                stats.Errori++;
+            }
+            finally
+            {
+                SafeUiInvoke(() => ApplyProgress(ente, new EnteStatistiche
+                {
+                    TotaleEnti = stats.TotaleEnti,
+                    Elaborati = stats.Elaborati,
+                    SitiTrovati = stats.SitiTrovati,
+                    EmailTrovate = stats.EmailTrovate,
+                    PecTrovate = stats.PecTrovate,
+                    Errori = stats.Errori
+                }));
+            }
+
+            if (delayMs > 0)
+            {
+                await Task.Delay(delayMs, cancellationToken);
+            }
+        }
+    }
+
+    private Ente CreateEnteFromComune(ComuneIstat comune) => new()
+    {
+        Regione = comune.Regione,
+        Provincia = string.IsNullOrWhiteSpace(comune.SiglaProvincia) ? comune.Provincia : comune.SiglaProvincia,
+        Comune = comune.Nome,
+        Denominazione = $"Pro Loco {comune.Nome}",
+        CodiceFiscale = string.Empty,
+        Categoria = "Pro Loco",
+        Stato = StatoEnte.DA_ELABORARE
+    };
+
+    private void BtnBrowseCsvComuni_Click(object? sender, EventArgs e)
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*",
+            Title = "Seleziona CSV Comuni ISTAT",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
+        };
+
+        if (dialog.ShowDialog(this) == DialogResult.OK)
+        {
+            txtCsvComuni.Text = dialog.FileName;
+        }
+    }
+
+    private string GetCsvComuniPath()
+    {
+        var csvPath = txtCsvComuni.Text.Trim();
+        if (string.IsNullOrWhiteSpace(csvPath))
+        {
+            throw new InvalidOperationException("Selezionare il CSV ufficiale ISTAT dei comuni italiani.");
+        }
+
+        if (!File.Exists(csvPath))
+        {
+            throw new FileNotFoundException("File CSV ISTAT non trovato.", csvPath);
+        }
+
+        return csvPath;
+    }
+
+    private void UpdateComuneModeUi()
+    {
+        var isComuniMode = GetImportMode() == ImportMode.ProLocoPerComune;
+        lblCsvComuni.Visible = isComuniMode;
+        txtCsvComuni.Visible = isComuniMode;
+        btnBrowseCsvComuni.Visible = isComuniMode;
+        btnAvvia.Text = isComuniMode ? "Avvia Ricerca Comuni" : "Avvia Ricerca";
+        btnImporta.Text = isComuniMode ? "Importa Comuni CSV" : "Importa Regione";
+    }
+
+    private void SafeUiInvoke(Action action)
+    {
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        if (InvokeRequired)
+        {
+            BeginInvoke(action);
+            return;
+        }
+
+        action();
+    }
+
+    private static bool IsTutteLeRegioni(string value) =>
+        value.Equals(TutteLeRegioniLabel, StringComparison.OrdinalIgnoreCase);
+
+    private static string SanitizeFilePart(string value) =>
+        string.Concat(value.Select(ch => char.IsLetterOrDigit(ch) ? ch : '_')).Trim('_').ToLowerInvariant();
 }
