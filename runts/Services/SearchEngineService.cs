@@ -7,10 +7,27 @@ namespace runts.Services;
 public sealed class SearchEngineService : IDisposable
 {
     private readonly LoggerService _logger;
+    private PuppeteerHelper? _puppeteer;
+    private bool? _headless;
 
     public SearchEngineService(LoggerService logger)
     {
         _logger = logger;
+    }
+
+    public async Task InitializeAsync(bool headless = true, CancellationToken cancellationToken = default)
+    {
+        if (_puppeteer is not null && _headless == headless)
+        {
+            await _puppeteer.InitializeAsync(cancellationToken);
+            return;
+        }
+
+        Dispose();
+        _puppeteer = new PuppeteerHelper(_logger, headless);
+        _headless = headless;
+        await _puppeteer.InitializeAsync(cancellationToken);
+        await _logger.LogAsync("✓ Puppeteer inizializzato (browser condiviso)", cancellationToken);
     }
 
     public List<string> CostruisciQuery(Ente ente)
@@ -45,18 +62,17 @@ public sealed class SearchEngineService : IDisposable
             return queries;
         }
 
-        return
-        [
-            $"{ente.Denominazione} sito ufficiale",
-            $"{ente.Denominazione} contatti",
-            $"{ente.Denominazione} {ente.Comune}"
-        ];
+        return [ente.Denominazione];
     }
 
     public async Task<string> FindBestWebsiteAsync(Ente ente, bool headless = true, CancellationToken cancellationToken = default)
     {
-        var queries = CostruisciQuery(ente);
-        using var chrome = new UndetectedChromeHelper(_logger, headless);
+        if (_puppeteer is null || _headless != headless)
+        {
+            await InitializeAsync(headless, cancellationToken);
+        }
+
+        var queries = CostruisciQuery(ente).Take(3).ToList();
 
         foreach (var query in queries)
         {
@@ -65,17 +81,22 @@ public sealed class SearchEngineService : IDisposable
             try
             {
                 await _logger.LogAsync("═══════════════════════════════════════", cancellationToken);
-                await _logger.LogAsync($"Ricerca query: '{query}'", cancellationToken);
+                await _logger.LogAsync($"Query: '{query}'", cancellationToken);
 
-                await _logger.LogAsync("→ Ricerca Google con Chrome reale...", cancellationToken);
-                var googleResults = await chrome.SearchGoogleAsync(query, cancellationToken);
-                await _logger.LogAsync($"  Google: {googleResults.Count} risultati", cancellationToken);
+                var results = await _puppeteer!.SearchAsync(query, cancellationToken);
+                if (results.Count == 0)
+                {
+                    await _logger.LogAsync($"✗ Nessun risultato per '{query}'", cancellationToken);
+                    continue;
+                }
 
-                foreach (var url in googleResults)
+                await _logger.LogAsync($"Risultati: {results.Count}", cancellationToken);
+
+                foreach (var url in results)
                 {
                     if (IsCandidateMatch(url, ente))
                     {
-                        await _logger.LogAsync($"✓ MATCH TROVATO: {url}", cancellationToken);
+                        await _logger.LogAsync($"✓ SITO TROVATO: {url}", cancellationToken);
                         await _logger.LogAsync("═══════════════════════════════════════", cancellationToken);
                         return ExtractDomain(url);
                     }
@@ -84,7 +105,7 @@ public sealed class SearchEngineService : IDisposable
                 }
 
                 await _logger.LogAsync($"✗ Nessun match con query '{query}'", cancellationToken);
-                await Task.Delay(1000, cancellationToken);
+                await Task.Delay(Random.Shared.Next(2000, 4000), cancellationToken);
             }
             catch (TaskCanceledException)
             {
@@ -109,7 +130,9 @@ public sealed class SearchEngineService : IDisposable
 
     public void Dispose()
     {
-        // Nessuna risorsa persistente da rilasciare.
+        _puppeteer?.Dispose();
+        _puppeteer = null;
+        _headless = null;
     }
 
     private static bool IsCandidateMatch(string url, Ente ente)
