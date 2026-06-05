@@ -27,6 +27,7 @@ public partial class MainForm : Form
     private readonly BindingList<Ente> _rows = [];
     private List<string> _regioniDisponibili = [];
     private CancellationTokenSource? _cts;
+    private readonly Queue<string> _comuniStatusLines = new();
 
     public MainForm(
         RuntsImporter importer,
@@ -198,6 +199,7 @@ public partial class MainForm : Form
         {
             var headless = !chkShowChrome.Checked;
             SetProcessingControls(isProcessing: true);
+            ResetComuniProgress();
             await Task.Run(
                 () => ProcessComuniAsync(csvPath, regione, outputFile, (int)numDelay.Value, headless, _cts.Token),
                 _cts.Token);
@@ -292,6 +294,11 @@ public partial class MainForm : Form
 
     private void ApplyProgress(Ente? ente, EnteStatistiche stats)
     {
+        ApplyProgress(ente, stats, updateMainProgressBar: true);
+    }
+
+    private void ApplyProgress(Ente? ente, EnteStatistiche stats, bool updateMainProgressBar)
+    {
         if (ente is not null)
         {
             var key = BuildEntityKey(ente);
@@ -302,8 +309,11 @@ public partial class MainForm : Form
             }
         }
 
-        progressBar.Maximum = Math.Max(stats.TotaleEnti, 1);
-        progressBar.Value = Math.Min(stats.Elaborati, progressBar.Maximum);
+        if (updateMainProgressBar)
+        {
+            progressBar.Maximum = Math.Max(stats.TotaleEnti, 1);
+            progressBar.Value = Math.Min(stats.Elaborati, progressBar.Maximum);
+        }
 
         lblTotale.Text = $"Totale Enti: {stats.TotaleEnti}";
         lblElaborati.Text = $"Elaborati: {stats.Elaborati} ({stats.PercentualeCompletamento}%)";
@@ -401,6 +411,8 @@ public partial class MainForm : Form
 
     private void SetProcessingControls(bool isProcessing)
     {
+        var isComuniMode = GetImportMode() == ImportMode.ProLocoPerComune;
+
         btnAvvia.Enabled = !isProcessing;
         btnImporta.Enabled = !isProcessing;
         btnExportCsv.Enabled = !isProcessing;
@@ -413,6 +425,14 @@ public partial class MainForm : Form
         txtCsvComuni.Enabled = !isProcessing;
         btnBrowseCsvComuni.Enabled = !isProcessing;
         btnFerma.Enabled = isProcessing;
+        progressBar.Visible = isComuniMode && isProcessing;
+        lblStatusComuni.Visible = isComuniMode && isProcessing;
+
+        if (!isProcessing && isComuniMode)
+        {
+            lblStatusComuni.Text = "Pronto per importazione comuni ISTAT";
+            _comuniStatusLines.Clear();
+        }
     }
 
     private async Task<int> ImportComuniIstatAsync(string csvPath, string regione, CancellationToken cancellationToken = default)
@@ -431,10 +451,21 @@ public partial class MainForm : Form
 
     private async Task ProcessComuniAsync(string csvPath, string regione, string outputFile, int delayMs, bool headless, CancellationToken cancellationToken)
     {
+        UpdateComuniProgress("📂 Caricamento CSV comuni ISTAT in corso...", 10, append: false);
         var comuni = await _istatComuniImporter.LoadComuniAsync(csvPath, cancellationToken);
+        UpdateComuniProgress($"✓ Caricati {comuni.Count} comuni da CSV", 30);
+        await Task.Delay(500, cancellationToken);
+
         if (!IsTutteLeRegioni(regione))
         {
+            UpdateComuniProgress($"🔍 Filtro comuni per regione: {regione}...", 40);
             comuni = _istatComuniImporter.FilterByRegione(comuni, regione);
+            UpdateComuniProgress($"✓ Filtrati {comuni.Count} comuni per {regione}", 50);
+            await Task.Delay(500, cancellationToken);
+        }
+        else
+        {
+            UpdateComuniProgress($"⚠ Elaborazione di TUTTI i {comuni.Count} comuni (nessun filtro)", 50);
         }
 
         var enti = comuni.Select(CreateEnteFromComune).ToList();
@@ -453,8 +484,13 @@ public partial class MainForm : Form
             ApplyProgress(null, new EnteStatistiche { TotaleEnti = enti.Count });
         });
 
+        UpdateComuniProgress("🌐 Avvio browser Puppeteer...", 60);
         using var puppeteer = new PuppeteerHelper(_logger, headless);
         await puppeteer.InitializeAsync(cancellationToken);
+        UpdateComuniProgress("✓ Browser Puppeteer pronto", 70);
+        await Task.Delay(500, cancellationToken);
+
+        UpdateComuniProgress($"🔍 Ricerca Pro Loco per {comuni.Count} comuni in corso...", 75);
         var comuniSearchEngine = new ComuniSearchEngine(_logger, puppeteer);
         await using var csvWriter = new CsvWriterService(outputFile);
 
@@ -501,9 +537,20 @@ public partial class MainForm : Form
                 if (!string.IsNullOrWhiteSpace(ente.SitoWeb)) stats.SitiTrovati++;
                 if (!string.IsNullOrWhiteSpace(ente.Email)) stats.EmailTrovate++;
                 if (!string.IsNullOrWhiteSpace(ente.PEC)) stats.PecTrovate++;
+
+                var progressPercentage = comuni.Count == 0
+                    ? 100
+                    : 75 + (int)(((index + 1) / (double)comuni.Count) * 25);
+                UpdateComuniProgress(
+                    $"[{index + 1}/{comuni.Count}] {comune.Nome} ({comune.SiglaProvincia}) | Trovate: {stats.SitiTrovati} | Email: {stats.EmailTrovate}",
+                    progressPercentage);
             }
             catch (OperationCanceledException)
             {
+                var cancelledPercentage = comuni.Count == 0
+                    ? 0
+                    : 75 + (int)(((stats.Elaborati) / (double)comuni.Count) * 25);
+                UpdateComuniProgress("⚠ Elaborazione annullata dall'utente", cancelledPercentage);
                 throw;
             }
             catch (Exception ex)
@@ -527,7 +574,7 @@ public partial class MainForm : Form
                     EmailTrovate = stats.EmailTrovate,
                     PecTrovate = stats.PecTrovate,
                     Errori = stats.Errori
-                }));
+                }, updateMainProgressBar: false));
             }
 
             if (delayMs > 0)
@@ -535,6 +582,8 @@ public partial class MainForm : Form
                 await Task.Delay(delayMs, cancellationToken);
             }
         }
+
+        UpdateComuniProgress($"✓ COMPLETATO: {stats.SitiTrovati}/{stats.Elaborati} Pro Loco trovate | {stats.EmailTrovate} email", 100);
     }
 
     private Ente CreateEnteFromComune(ComuneIstat comune) => new()
@@ -585,8 +634,47 @@ public partial class MainForm : Form
         lblCsvComuni.Visible = isComuniMode;
         txtCsvComuni.Visible = isComuniMode;
         btnBrowseCsvComuni.Visible = isComuniMode;
+        lblStatusComuni.Visible = isComuniMode && btnFerma.Enabled;
         btnAvvia.Text = isComuniMode ? "Avvia Ricerca Comuni" : "Avvia Ricerca";
         btnImporta.Text = isComuniMode ? "Importa Comuni CSV" : "Importa Regione";
+    }
+
+    private void ResetComuniProgress()
+    {
+        SafeUiInvoke(() =>
+        {
+            _comuniStatusLines.Clear();
+            lblStatusComuni.Text = "Avvio elaborazione...";
+            progressBar.Minimum = 0;
+            progressBar.Maximum = 100;
+            progressBar.Value = 0;
+            progressBar.Visible = true;
+            lblStatusComuni.Visible = true;
+        });
+    }
+
+    private void UpdateComuniProgress(string status, int percentage, bool append = true)
+    {
+        SafeUiInvoke(() =>
+        {
+            progressBar.Minimum = 0;
+            progressBar.Maximum = 100;
+            progressBar.Value = Math.Clamp(percentage, 0, 100);
+
+            if (!append)
+            {
+                _comuniStatusLines.Clear();
+            }
+
+            _comuniStatusLines.Enqueue(status);
+            while (_comuniStatusLines.Count > 3)
+            {
+                _comuniStatusLines.Dequeue();
+            }
+
+            lblStatusComuni.Text = string.Join(Environment.NewLine, _comuniStatusLines);
+            lblFonte.Text = $"Fonte dati: {status}";
+        });
     }
 
     private void SafeUiInvoke(Action action)
