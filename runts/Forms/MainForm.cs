@@ -42,6 +42,7 @@ public partial class MainForm : Form
         btnExportCsv.Click += async (_, _) => await ExportCsvAsync();
         btnExportExcel.Click += async (_, _) => await ExportExcelAsync();
         cmbModalita.SelectedIndexChanged += (_, _) => RefreshRegionOptions();
+        SetProcessingControls(isProcessing: false);
 
         Load += async (_, _) => await LoadDataAsync();
     }
@@ -84,12 +85,19 @@ public partial class MainForm : Form
     private async Task AvviaRicercaAsync()
     {
         var regione = GetRegione();
+        var outputFile = GetOutputCsvPath();
+        if (string.IsNullOrWhiteSpace(outputFile))
+        {
+            return;
+        }
+
         _cts?.Cancel();
         _cts = new CancellationTokenSource();
 
         try
         {
             var headless = !chkShowChrome.Checked;
+            SetProcessingControls(isProcessing: true);
             var progress = new Progress<(Ente ente, EnteStatistiche stats)>(x =>
             {
                 if (InvokeRequired)
@@ -102,8 +110,17 @@ public partial class MainForm : Form
                 }
             });
 
-            await _contactFinder.ProcessRegionAsync(regione, (int)numThread.Value, (int)numDelay.Value, headless, progress, _cts.Token);
+            await Task.Run(async () =>
+            {
+                await _contactFinder.ProcessRegionAsync(regione, (int)numThread.Value, (int)numDelay.Value, headless, outputFile, progress, _cts.Token);
+            }, _cts.Token);
+
             await RefreshGridAsync();
+            MessageBox.Show(
+                $"Ricerca completata.\n\nRisultati salvati in:\n{outputFile}",
+                Text,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
         }
         catch (OperationCanceledException)
         {
@@ -116,6 +133,10 @@ public partial class MainForm : Form
                     "Errore",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
+        }
+        finally
+        {
+            SetProcessingControls(isProcessing: false);
         }
     }
 
@@ -265,5 +286,32 @@ public partial class MainForm : Form
         }
 
         return $"ALT:{ente.Regione.Trim().ToUpperInvariant()}|{ente.Comune.Trim().ToUpperInvariant()}|{ente.Categoria.Trim().ToUpperInvariant()}";
+    }
+
+    private string GetOutputCsvPath()
+    {
+        using var dialog = new SaveFileDialog
+        {
+            Filter = "CSV files (*.csv)|*.csv",
+            FileName = $"runts_contatti_{DateTime.Now:yyyyMMdd_HHmmss}.csv",
+            Title = "Salva risultati ricerca contatti",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
+        };
+
+        return dialog.ShowDialog(this) == DialogResult.OK ? dialog.FileName : string.Empty;
+    }
+
+    private void SetProcessingControls(bool isProcessing)
+    {
+        btnAvvia.Enabled = !isProcessing;
+        btnImporta.Enabled = !isProcessing;
+        btnExportCsv.Enabled = !isProcessing;
+        btnExportExcel.Enabled = !isProcessing;
+        cmbRegione.Enabled = !isProcessing;
+        cmbModalita.Enabled = !isProcessing;
+        chkShowChrome.Enabled = !isProcessing;
+        numThread.Enabled = !isProcessing;
+        numDelay.Enabled = !isProcessing;
+        btnFerma.Enabled = isProcessing;
     }
 }
