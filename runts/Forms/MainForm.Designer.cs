@@ -26,6 +26,7 @@ partial class MainForm
     private Label lblPec = null!;
     private Label lblErrori = null!;
     private Label lblFonte = null!;
+    private Label lblStatusComuni = null!;
     private ProgressBar progressBar = null!;
     private DataGridView gridEnti = null!;
 
@@ -65,6 +66,7 @@ partial class MainForm
         lblPec = new Label();
         lblErrori = new Label();
         lblFonte = new Label();
+        lblStatusComuni = new Label();
         progressBar = new ProgressBar();
         gridEnti = new DataGridView();
         var lblModalita = new Label();
@@ -158,25 +160,33 @@ partial class MainForm
 
         progressBar.Location = new Point(20, 158);
         progressBar.Size = new Size(1150, 22);
+        progressBar.Style = ProgressBarStyle.Continuous;
+        progressBar.Visible = false;
 
         lblFonte.Location = new Point(20, 185);
         lblFonte.Size = new Size(1150, 24);
+        
+        lblStatusComuni.Location = new Point(20, 209);
+        lblStatusComuni.Size = new Size(1150, 66);
+        lblStatusComuni.Text = "Pronto per importazione comuni ISTAT";
+        lblStatusComuni.ForeColor = Color.DarkBlue;
+        lblStatusComuni.Visible = false;
 
-        lblTotale.Location = new Point(20, 211);
+        lblTotale.Location = new Point(20, 280);
         lblTotale.Size = new Size(170, 24);
-        lblElaborati.Location = new Point(200, 211);
+        lblElaborati.Location = new Point(200, 280);
         lblElaborati.Size = new Size(170, 24);
-        lblSiti.Location = new Point(380, 211);
+        lblSiti.Location = new Point(380, 280);
         lblSiti.Size = new Size(170, 24);
-        lblEmail.Location = new Point(560, 211);
+        lblEmail.Location = new Point(560, 280);
         lblEmail.Size = new Size(170, 24);
-        lblPec.Location = new Point(740, 211);
+        lblPec.Location = new Point(740, 280);
         lblPec.Size = new Size(170, 24);
-        lblErrori.Location = new Point(920, 211);
+        lblErrori.Location = new Point(920, 280);
         lblErrori.Size = new Size(170, 24);
 
-        gridEnti.Location = new Point(20, 246);
-        gridEnti.Size = new Size(1235, 484);
+        gridEnti.Location = new Point(20, 315);
+        gridEnti.Size = new Size(1235, 415);
         gridEnti.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         gridEnti.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         gridEnti.AllowUserToAddRows = false;
@@ -212,6 +222,7 @@ partial class MainForm
             numDelay,
             progressBar,
             lblFonte,
+            lblStatusComuni,
             lblTotale,
             lblElaborati,
             lblSiti,
