@@ -93,20 +93,84 @@ public partial class MainForm : Form
 
     private async Task ImportRegioneAsync()
     {
+        var controlsDisabled = false;
         try
         {
             var importMode = GetImportMode();
-            var progress = new Progress<string>(message => lblFonte.Text = $"Fonte dati: {message}");
+            var regione = GetRegione();
+            var csvPath = importMode == ImportMode.ProLocoPerComune ? GetCsvComuniPath() : string.Empty;
+
+            btnImporta.Enabled = false;
+            cmbRegione.Enabled = false;
+            cmbModalita.Enabled = false;
+            txtCsvComuni.Enabled = false;
+            btnBrowseCsvComuni.Enabled = false;
+            controlsDisabled = true;
 
             lblFonte.Text = "Fonte dati: avvio importazione...";
-            var regione = GetRegione();
-            var imported = importMode == ImportMode.ProLocoPerComune
-                ? await ImportComuniIstatAsync(GetCsvComuniPath(), regione)
-                : await _importer.ImportRegioneAsync(regione, importMode, progress);
+
+            var imported = await Task.Run(async () =>
+            {
+                if (importMode == ImportMode.ProLocoPerComune)
+                {
+                    SafeUiInvoke(() => lblFonte.Text = "Fonte dati: 📂 caricamento CSV ISTAT in corso...");
+
+                    var comuni = await _istatComuniImporter.LoadComuniAsync(csvPath, default);
+                    SafeUiInvoke(() => lblFonte.Text = $"Fonte dati: ✓ caricati {comuni.Count} comuni da CSV");
+                    await Task.Delay(800);
+
+                    if (!IsTutteLeRegioni(regione))
+                    {
+                        SafeUiInvoke(() => lblFonte.Text = $"Fonte dati: 🔍 filtro comuni per regione {regione}...");
+                        comuni = _istatComuniImporter.FilterByRegione(comuni, regione);
+                        SafeUiInvoke(() => lblFonte.Text = $"Fonte dati: ✓ filtrati {comuni.Count} comuni per {regione}");
+                        await Task.Delay(800);
+                    }
+                    else
+                    {
+                        SafeUiInvoke(() => lblFonte.Text = $"Fonte dati: ⚠ elaborazione di TUTTI i {comuni.Count} comuni (nessun filtro)");
+                        await Task.Delay(800);
+                    }
+
+                    SafeUiInvoke(() => lblFonte.Text = "Fonte dati: 💾 salvataggio comuni in database locale...");
+                    var enti = comuni.Select(CreateEnteFromComune).ToList();
+                    await _csvManager.CreateBackupAsync("import_istatcomuni", default);
+                    await _csvManager.UpsertManyAsync(enti, default);
+
+                    SafeUiInvoke(() => lblFonte.Text = $"Fonte dati: ✓ salvati {enti.Count} comuni in database");
+                    await Task.Delay(500);
+                    return enti.Count;
+                }
+
+                var progress = new Progress<string>(message => SafeUiInvoke(() => lblFonte.Text = $"Fonte dati: {message}"));
+                return await _importer.ImportRegioneAsync(regione, importMode, progress);
+            });
 
             await RefreshGridAsync();
             var modeLabel = GetModeLabel(importMode);
-            MessageBox.Show($"Importati {imported} record ({modeLabel}) per {regione}.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+            var message = importMode == ImportMode.ProLocoPerComune
+                ? $"✓ Importati {imported} comuni ({modeLabel}) per {regione}\n\n" +
+                  "I comuni sono ora visibili nella tabella sottostante.\n\n" +
+                  "📌 PROSSIMO STEP:\n" +
+                  "Clicca [Avvia Ricerca Comuni] per cercare le Pro Loco su web\n" +
+                  "(Google, DuckDuckGo, Bing) ed estrarre email/contatti."
+                : $"Importati {imported} record ({modeLabel}) per {regione}.";
+
+            MessageBox.Show(message, "Import Completato", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (InvalidOperationException ex)
+        {
+            MessageBox.Show(ex.Message, "Attenzione", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (FileNotFoundException ex)
+        {
+            MessageBox.Show(
+                $"File CSV ISTAT non trovato:\n\n{ex.Message}\n\n" +
+                "Scarica il file da:\nhttps://www.istat.it/storage/codici-unita-amministrative/Elenco-comuni-italiani.csv",
+                "File Mancante",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
         }
         catch (Exception ex)
         {
@@ -115,6 +179,17 @@ public partial class MainForm : Form
                 "Errore",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
+        }
+        finally
+        {
+            if (controlsDisabled)
+            {
+                btnImporta.Enabled = true;
+                cmbRegione.Enabled = true;
+                cmbModalita.Enabled = true;
+                txtCsvComuni.Enabled = true;
+                btnBrowseCsvComuni.Enabled = true;
+            }
         }
     }
 
@@ -433,20 +508,6 @@ public partial class MainForm : Form
             lblStatusComuni.Text = "Pronto per importazione comuni ISTAT";
             _comuniStatusLines.Clear();
         }
-    }
-
-    private async Task<int> ImportComuniIstatAsync(string csvPath, string regione, CancellationToken cancellationToken = default)
-    {
-        var comuni = await _istatComuniImporter.LoadComuniAsync(csvPath, cancellationToken);
-        if (!IsTutteLeRegioni(regione))
-        {
-            comuni = _istatComuniImporter.FilterByRegione(comuni, regione);
-        }
-
-        var enti = comuni.Select(CreateEnteFromComune).ToList();
-        await _csvManager.CreateBackupAsync("import_istatcomuni", cancellationToken);
-        await _csvManager.UpsertManyAsync(enti, cancellationToken);
-        return enti.Count;
     }
 
     private async Task ProcessComuniAsync(string csvPath, string regione, string outputFile, int delayMs, bool headless, CancellationToken cancellationToken)
