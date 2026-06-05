@@ -33,6 +33,7 @@ internal static class Program
         services.AddSingleton<PdfProLocoImporter>();
         services.AddSingleton<RuntsImporter>();
         services.AddSingleton<SearchEngineService>();
+        services.AddSingleton<IstatComuniImporter>();
         services.AddSingleton<WebScraperService>();
         services.AddSingleton<ContactFinderService>();
         services.AddSingleton<ExportService>();

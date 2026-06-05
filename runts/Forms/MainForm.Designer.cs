@@ -13,6 +13,9 @@ partial class MainForm
     private Button btnFerma = null!;
     private Button btnExportCsv = null!;
     private Button btnExportExcel = null!;
+    private Label lblCsvComuni = null!;
+    private TextBox txtCsvComuni = null!;
+    private Button btnBrowseCsvComuni = null!;
     private NumericUpDown numThread = null!;
     private CheckBox chkShowChrome = null!;
     private NumericUpDown numDelay = null!;
@@ -49,6 +52,9 @@ partial class MainForm
         btnFerma = new Button();
         btnExportCsv = new Button();
         btnExportExcel = new Button();
+        lblCsvComuni = new Label();
+        txtCsvComuni = new TextBox();
+        btnBrowseCsvComuni = new Button();
         numThread = new NumericUpDown();
         chkShowChrome = new CheckBox();
         numDelay = new NumericUpDown();
@@ -106,60 +112,71 @@ partial class MainForm
         btnFerma.Size = new Size(80, 32);
 
         btnExportCsv.Text = "Esporta CSV Regione";
-        btnExportCsv.Location = new Point(510, 58);
+        btnExportCsv.Location = new Point(860, 58);
         btnExportCsv.Size = new Size(160, 32);
 
         btnExportExcel.Text = "Esporta Excel Regione";
-        btnExportExcel.Location = new Point(680, 58);
+        btnExportExcel.Location = new Point(1030, 58);
         btnExportExcel.Size = new Size(170, 32);
 
+        lblCsvComuni.Text = "CSV comuni ISTAT";
+        lblCsvComuni.Location = new Point(20, 64);
+        lblCsvComuni.Size = new Size(130, 24);
+
+        txtCsvComuni.Location = new Point(160, 60);
+        txtCsvComuni.Size = new Size(590, 27);
+
+        btnBrowseCsvComuni.Text = "Sfoglia...";
+        btnBrowseCsvComuni.Location = new Point(760, 58);
+        btnBrowseCsvComuni.Size = new Size(90, 32);
+
         lblThread.Text = "Numero Thread";
-        lblThread.Location = new Point(20, 62);
+        lblThread.Location = new Point(20, 98);
         lblThread.Size = new Size(110, 24);
 
         numThread.Minimum = 1;
         numThread.Maximum = 10;
         numThread.Value = 3;
-        numThread.Location = new Point(135, 60);
+        numThread.Location = new Point(135, 96);
         numThread.Size = new Size(80, 27);
 
         chkShowChrome.Text = "Mostra finestre Chrome (debug)";
-        chkShowChrome.Location = new Point(20, 92);
+        chkShowChrome.Location = new Point(20, 128);
         chkShowChrome.Size = new Size(260, 24);
         chkShowChrome.Checked = false;
 
         lblDelay.Text = "Delay richieste (ms)";
-        lblDelay.Location = new Point(240, 62);
+        lblDelay.Location = new Point(240, 98);
         lblDelay.Size = new Size(140, 24);
 
         numDelay.Minimum = 100;
         numDelay.Maximum = 5000;
         numDelay.Value = 500;
         numDelay.Increment = 100;
-        numDelay.Location = new Point(390, 60);
+        numDelay.Location = new Point(390, 96);
         numDelay.Size = new Size(100, 27);
 
-        progressBar.Location = new Point(20, 122);
+        progressBar.Location = new Point(20, 158);
         progressBar.Size = new Size(1150, 22);
 
-        lblFonte.Location = new Point(20, 149);
+        lblFonte.Location = new Point(20, 185);
         lblFonte.Size = new Size(1150, 24);
 
-        lblTotale.Location = new Point(20, 175);
+        lblTotale.Location = new Point(20, 211);
         lblTotale.Size = new Size(170, 24);
-        lblElaborati.Location = new Point(200, 175);
+        lblElaborati.Location = new Point(200, 211);
         lblElaborati.Size = new Size(170, 24);
-        lblSiti.Location = new Point(380, 175);
+        lblSiti.Location = new Point(380, 211);
         lblSiti.Size = new Size(170, 24);
-        lblEmail.Location = new Point(560, 175);
+        lblEmail.Location = new Point(560, 211);
         lblEmail.Size = new Size(170, 24);
-        lblPec.Location = new Point(740, 175);
+        lblPec.Location = new Point(740, 211);
         lblPec.Size = new Size(170, 24);
-        lblErrori.Location = new Point(920, 175);
+        lblErrori.Location = new Point(920, 211);
         lblErrori.Size = new Size(170, 24);
 
-        gridEnti.Location = new Point(20, 210);
-        gridEnti.Size = new Size(1235, 520);
+        gridEnti.Location = new Point(20, 246);
+        gridEnti.Size = new Size(1235, 484);
         gridEnti.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         gridEnti.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         gridEnti.AllowUserToAddRows = false;
@@ -172,6 +189,7 @@ partial class MainForm
         toolTip.SetToolTip(chkShowChrome, "Se selezionato apre le finestre Chrome durante l'elaborazione");
         toolTip.SetToolTip(numDelay, "Delay tra richieste HTTP in millisecondi");
         toolTip.SetToolTip(btnImporta, "Importa enti RUNTS reali, Pro Loco da albi regionali ufficiali PDF o Pro Loco generate dai comuni ISTAT");
+        toolTip.SetToolTip(txtCsvComuni, "Percorso del CSV ufficiale ISTAT dei comuni italiani");
 
         Controls.AddRange([
             lblModalita,
@@ -184,6 +202,9 @@ partial class MainForm
             btnFerma,
             btnExportCsv,
             btnExportExcel,
+            lblCsvComuni,
+            txtCsvComuni,
+            btnBrowseCsvComuni,
             lblThread,
             numThread,
             chkShowChrome,
