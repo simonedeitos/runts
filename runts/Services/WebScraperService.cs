@@ -3,7 +3,7 @@ using runts.Helpers;
 namespace runts.Services;
 
 /// <summary>
-/// Servizio scraping siti web tramite Chrome reale con Selenium.
+/// Servizio scraping siti web tramite PuppeteerSharp.
 /// </summary>
 public sealed class WebScraperService
 {
@@ -31,12 +31,13 @@ public sealed class WebScraperService
 
         try
         {
-            using var chrome = new UndetectedChromeHelper(_logger, headless);
+            using var chrome = new PuppeteerHelper(_logger, headless);
+            await chrome.InitializeAsync(cancellationToken);
             await _logger.LogAsync($"Scansione sito: {baseUrl}", cancellationToken);
             foreach (var pageUrl in GetPagesToScan(baseUrl))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var (emails, html) = await chrome.ExtractEmailsFromPage(pageUrl, cancellationToken);
+                var (emails, html) = await chrome.ExtractPageContentAsync(pageUrl, cancellationToken);
                 if (string.IsNullOrWhiteSpace(html))
                 {
                     continue;

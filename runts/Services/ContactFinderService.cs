@@ -39,6 +39,7 @@ public sealed class ContactFinderService
         var items = all.Where(x => x.Regione.Equals(regione, StringComparison.OrdinalIgnoreCase)).ToList();
         var stats = new EnteStatistiche { TotaleEnti = items.Count };
         _workerSemaphore = new SemaphoreSlim(Math.Max(workerCount, 1), Math.Max(workerCount, 1));
+        await _searchEngineService.InitializeAsync(headless, cancellationToken);
 
         var channel = Channel.CreateBounded<Ente>(new BoundedChannelOptions(Math.Max(workerCount * 2, 4))
         {
@@ -47,27 +48,34 @@ public sealed class ContactFinderService
             FullMode = BoundedChannelFullMode.Wait
         });
 
-        var producer = Task.Run(async () =>
+        try
         {
-            foreach (var ente in items)
+            var producer = Task.Run(async () =>
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                await channel.Writer.WriteAsync(ente, cancellationToken);
-            }
+                foreach (var ente in items)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await channel.Writer.WriteAsync(ente, cancellationToken);
+                }
 
-            channel.Writer.Complete();
-        }, cancellationToken);
+                channel.Writer.Complete();
+            }, cancellationToken);
 
-        var consumers = Enumerable.Range(0, Math.Max(workerCount, 1)).Select(_ => Task.Run(async () =>
+            var consumers = Enumerable.Range(0, Math.Max(workerCount, 1)).Select(_ => Task.Run(async () =>
+            {
+                await foreach (var ente in channel.Reader.ReadAllAsync(cancellationToken))
+                {
+                    _pauseEvent.Wait(cancellationToken);
+                    await ProcessEnteAsync(ente, delayMs, headless, stats, progress, cancellationToken);
+                }
+            }, cancellationToken)).ToArray();
+
+            await Task.WhenAll(consumers.Append(producer));
+        }
+        finally
         {
-            await foreach (var ente in channel.Reader.ReadAllAsync(cancellationToken))
-            {
-                _pauseEvent.Wait(cancellationToken);
-                await ProcessEnteAsync(ente, delayMs, headless, stats, progress, cancellationToken);
-            }
-        }, cancellationToken)).ToArray();
-
-        await Task.WhenAll(consumers.Append(producer));
+            _searchEngineService.Dispose();
+        }
     }
 
     private async Task ProcessEnteAsync(Ente ente, int delayMs, bool headless, EnteStatistiche stats, IProgress<(Ente ente, EnteStatistiche stats)> progress, CancellationToken cancellationToken)
