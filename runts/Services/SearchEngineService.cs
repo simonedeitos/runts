@@ -6,13 +6,11 @@ namespace runts.Services;
 
 public sealed class SearchEngineService : IDisposable
 {
-    private readonly BrightDataSearchService _brightData;
     private readonly LoggerService _logger;
 
     public SearchEngineService(LoggerService logger)
     {
         _logger = logger;
-        _brightData = new BrightDataSearchService(logger);
     }
 
     public List<string> CostruisciQuery(Ente ente)
@@ -72,13 +70,8 @@ public sealed class SearchEngineService : IDisposable
 
     public async Task<string> FindBestWebsiteAsync(Ente ente, bool headless = true, CancellationToken cancellationToken = default)
     {
-        if (!_brightData.IsConfigured())
-        {
-            await _logger.LogAsync("⚠ Bright Data non configurato. Vai in Impostazioni → Configura Bright Data API", cancellationToken);
-            return string.Empty;
-        }
-
         var queries = CostruisciQuery(ente);
+        using var chrome = new UndetectedChromeHelper(_logger, headless);
 
         foreach (var query in queries)
         {
@@ -89,11 +82,11 @@ public sealed class SearchEngineService : IDisposable
                 await _logger.LogAsync("═══════════════════════════════════════", cancellationToken);
                 await _logger.LogAsync($"Ricerca query: '{query}'", cancellationToken);
 
-                await _logger.LogAsync("→ Tentativo Bing...", cancellationToken);
-                var bingResults = await _brightData.SearchBingAsync(query, cancellationToken);
-                await _logger.LogAsync($"  Bing: {bingResults.Count} risultati", cancellationToken);
+                await _logger.LogAsync("→ Ricerca Google con Chrome reale...", cancellationToken);
+                var googleResults = await chrome.SearchGoogleAsync(query, cancellationToken);
+                await _logger.LogAsync($"  Google: {googleResults.Count} risultati", cancellationToken);
 
-                foreach (var url in bingResults)
+                foreach (var url in googleResults)
                 {
                     if (IsCandidateMatch(url, ente))
                     {
@@ -103,25 +96,6 @@ public sealed class SearchEngineService : IDisposable
                     }
 
                     await _logger.LogAsync($"  ✗ Scartato: {url}", cancellationToken);
-                }
-
-                if (bingResults.Count == 0)
-                {
-                    await _logger.LogAsync("→ Tentativo Google (fallback)...", cancellationToken);
-                    var googleResults = await _brightData.SearchGoogleAsync(query, cancellationToken);
-                    await _logger.LogAsync($"  Google: {googleResults.Count} risultati", cancellationToken);
-
-                    foreach (var url in googleResults)
-                    {
-                        if (IsCandidateMatch(url, ente))
-                        {
-                            await _logger.LogAsync($"✓ MATCH TROVATO: {url}", cancellationToken);
-                            await _logger.LogAsync("═══════════════════════════════════════", cancellationToken);
-                            return ExtractDomain(url);
-                        }
-
-                        await _logger.LogAsync($"  ✗ Scartato: {url}", cancellationToken);
-                    }
                 }
 
                 await _logger.LogAsync($"✗ Nessun match con query '{query}'", cancellationToken);
@@ -150,7 +124,7 @@ public sealed class SearchEngineService : IDisposable
 
     public void Dispose()
     {
-        _brightData.Dispose();
+        // Nessuna risorsa persistente da rilasciare.
     }
 
     private static bool IsCandidateMatch(string url, Ente ente)
