@@ -32,6 +32,7 @@ public sealed class ContactFinderService
         int workerCount,
         int delayMs,
         bool headless,
+        string outputFilePath,
         IProgress<(Ente ente, EnteStatistiche stats)> progress,
         CancellationToken cancellationToken)
     {
@@ -40,6 +41,7 @@ public sealed class ContactFinderService
         var stats = new EnteStatistiche { TotaleEnti = items.Count };
         _workerSemaphore = new SemaphoreSlim(Math.Max(workerCount, 1), Math.Max(workerCount, 1));
         await _searchEngineService.InitializeAsync(headless, cancellationToken);
+        await using var csvWriter = new CsvWriterService(outputFilePath);
 
         var channel = Channel.CreateBounded<Ente>(new BoundedChannelOptions(Math.Max(workerCount * 2, 4))
         {
@@ -66,7 +68,7 @@ public sealed class ContactFinderService
                 await foreach (var ente in channel.Reader.ReadAllAsync(cancellationToken))
                 {
                     _pauseEvent.Wait(cancellationToken);
-                    await ProcessEnteAsync(ente, delayMs, headless, stats, progress, cancellationToken);
+                    await ProcessEnteAsync(ente, delayMs, headless, stats, progress, csvWriter, cancellationToken);
                 }
             }, cancellationToken)).ToArray();
 
@@ -78,7 +80,7 @@ public sealed class ContactFinderService
         }
     }
 
-    private async Task ProcessEnteAsync(Ente ente, int delayMs, bool headless, EnteStatistiche stats, IProgress<(Ente ente, EnteStatistiche stats)> progress, CancellationToken cancellationToken)
+    private async Task ProcessEnteAsync(Ente ente, int delayMs, bool headless, EnteStatistiche stats, IProgress<(Ente ente, EnteStatistiche stats)> progress, CsvWriterService csvWriter, CancellationToken cancellationToken)
     {
         await _workerSemaphore.WaitAsync(cancellationToken);
         try
@@ -109,6 +111,7 @@ public sealed class ContactFinderService
             ente.DataUltimoControllo = DateTime.Now;
             ente.Stato = ente.Stato == StatoEnte.ERRORE ? StatoEnte.ERRORE : StatoEnte.COMPLETATO;
             await _csvManager.UpdateAsync(ente, cancellationToken);
+            await csvWriter.WriteRowAsync(ente, cancellationToken);
 
             lock (stats)
             {
@@ -127,6 +130,7 @@ public sealed class ContactFinderService
             ente.Stato = StatoEnte.ERRORE;
             ente.DataUltimoControllo = DateTime.Now;
             await _csvManager.UpdateAsync(ente, cancellationToken);
+            await csvWriter.WriteRowAsync(ente, cancellationToken);
             await _logger.LogAsync($"Errore ente {ente.CodiceFiscale}: {ex.Message}", cancellationToken);
 
             lock (stats)
