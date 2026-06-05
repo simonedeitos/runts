@@ -1,6 +1,5 @@
 using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
-using OpenQA.Selenium.Interactions;
 using OpenQA.Selenium.Support.UI;
 using runts.Services;
 using WebDriverManager;
@@ -40,7 +39,15 @@ public sealed class UndetectedChromeHelper : IDisposable
                 await HumanDelay(cancellationToken);
                 var searchBox = Driver.FindElement(By.CssSelector("textarea[name='q']"));
                 await MoveMouseToElement(searchBox, cancellationToken);
-                searchBox.Click();
+                if (Driver is IJavaScriptExecutor jsClick)
+                {
+                    jsClick.ExecuteScript("arguments[0].click();", searchBox);
+                }
+                else
+                {
+                    searchBox.Click();
+                }
+
                 await TypeLikeHuman(searchBox, query, cancellationToken);
                 searchBox.SendKeys(OpenQA.Selenium.Keys.Enter);
 
@@ -109,20 +116,13 @@ public sealed class UndetectedChromeHelper : IDisposable
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var body = Driver.FindElement(By.TagName("body"));
-        new Actions(Driver).MoveToElement(body, 1, 1).Perform();
-
-        var steps = Random.Shared.Next(8, 16);
-        for (var i = 0; i < steps; i++)
+        if (Driver is IJavaScriptExecutor js)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var offsetX = Random.Shared.Next(-6, 7);
-            var offsetY = Random.Shared.Next(-4, 5);
-            new Actions(Driver).MoveByOffset(offsetX, offsetY).Perform();
+            js.ExecuteScript("arguments[0].scrollIntoView({block: 'center', inline: 'nearest'});", element);
             await Task.Delay(Random.Shared.Next(15, 35), cancellationToken);
+            js.ExecuteScript("arguments[0].focus();", element);
         }
 
-        new Actions(Driver).MoveToElement(element).Perform();
         await Task.Delay(Random.Shared.Next(30, 80), cancellationToken);
     }
 
