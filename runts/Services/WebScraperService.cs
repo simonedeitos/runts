@@ -3,7 +3,7 @@ using runts.Helpers;
 namespace runts.Services;
 
 /// <summary>
-/// Servizio scraping siti web tramite Bright Data Web Unlocker.
+/// Servizio scraping siti web tramite Chrome reale con Selenium.
 /// </summary>
 public sealed class WebScraperService
 {
@@ -31,18 +31,18 @@ public sealed class WebScraperService
 
         try
         {
-            using var brightData = new BrightDataSearchService(_logger);
+            using var chrome = new UndetectedChromeHelper(_logger, headless);
             await _logger.LogAsync($"Scansione sito: {baseUrl}", cancellationToken);
             foreach (var pageUrl in GetPagesToScan(baseUrl))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var html = await brightData.FetchPageAsync(pageUrl, cancellationToken);
+                var (emails, html) = await chrome.ExtractEmailsFromPage(pageUrl, cancellationToken);
                 if (string.IsNullOrWhiteSpace(html))
                 {
                     continue;
                 }
 
-                foreach (var email in EmailExtractor.Extract(html))
+                foreach (var email in emails)
                 {
                     allEmails.Add(email);
                     if (PecIdentifier.IsPec(email))

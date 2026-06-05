@@ -49,7 +49,7 @@ public partial class MainForm : Form
     private async Task LoadDataAsync()
     {
         cmbModalita.Items.Clear();
-        chkShowChrome.Visible = false;
+        chkShowChrome.Visible = true;
         cmbModalita.Items.Add("RUNTS - Enti Terzo Settore Registrati");
         cmbModalita.Items.Add("Pro Loco - Albi Regionali Ufficiali (PDF)");
         cmbModalita.Items.Add("Pro Loco - Ricerca per Comune (ISTAT)");
