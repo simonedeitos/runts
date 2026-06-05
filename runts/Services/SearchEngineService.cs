@@ -18,37 +18,22 @@ public sealed class SearchEngineService : IDisposable
         if (ente.Categoria.Equals("Pro Loco", StringComparison.OrdinalIgnoreCase))
         {
             var (nome, cf) = EstraiNomeECF(ente.Denominazione);
-            var comune = ente.Comune?.Trim() ?? string.Empty;
-
             var queries = new List<string>();
 
             _logger.LogAsync($"Parsing denominazione: '{ente.Denominazione}'").GetAwaiter().GetResult();
             _logger.LogAsync($"  → Nome estratto: '{nome}'").GetAwaiter().GetResult();
             _logger.LogAsync($"  → CF estratto: '{cf}'").GetAwaiter().GetResult();
-            _logger.LogAsync($"  → Comune: '{comune}'").GetAwaiter().GetResult();
 
             if (!string.IsNullOrWhiteSpace(nome) && !string.IsNullOrWhiteSpace(cf))
             {
                 AddQuery(queries, $"{nome} {cf}");
-                AddQuery(queries, $"{nome} {cf} sito");
             }
 
             if (!string.IsNullOrWhiteSpace(nome))
             {
                 AddQuery(queries, nome);
+                AddQuery(queries, $"{nome} sito");
                 AddQuery(queries, $"{nome} contatti");
-                AddQuery(queries, $"{nome} email");
-            }
-
-            if (!string.IsNullOrWhiteSpace(comune))
-            {
-                AddQuery(queries, $"Pro Loco {comune}");
-                AddQuery(queries, $"Pro Loco {comune} sito ufficiale");
-            }
-
-            if (queries.Count > 7)
-            {
-                queries = queries.Take(7).ToList();
             }
 
             _logger.LogAsync($"Query generate: {queries.Count}").GetAwaiter().GetResult();
