@@ -11,6 +11,8 @@ partial class MainForm
     private TextBox txtCsvComuni;
     private Button btnBrowseCsvComuni;
     private TextBox txtParolaCerca;
+    private ComboBox cmbRegione;
+    private Button btnImportaComuni;
     private RadioButton rbRisultatoUnivoco;
     private RadioButton rbMultiRisultato;
     private CheckBox chkEmail;
@@ -62,6 +64,8 @@ partial class MainForm
         txtCsvComuni = new TextBox();
         btnBrowseCsvComuni = new Button();
         txtParolaCerca = new TextBox();
+        cmbRegione = new ComboBox();
+        btnImportaComuni = new Button();
         rbRisultatoUnivoco = new RadioButton();
         rbMultiRisultato = new RadioButton();
         chkEmail = new CheckBox();
@@ -98,7 +102,8 @@ partial class MainForm
         AutoScaleMode = AutoScaleMode.Font;
         BackColor = Color.White;
         ClientSize = new Size(1500, 900);
-        MinimumSize = new Size(1400, 800);
+        Font = new Font("Segoe UI", 9F);
+        MinimumSize = new Size(1500, 850);
         StartPosition = FormStartPosition.CenterScreen;
         Text = "EASYSEARCH";
 
@@ -121,7 +126,7 @@ partial class MainForm
         tableRoot.Location = new Point(0, 32);
         tableRoot.Padding = new Padding(12);
         tableRoot.RowCount = 6;
-        tableRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 250F));
+        tableRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 320F));
         tableRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
         tableRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));
         tableRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));
@@ -140,11 +145,11 @@ partial class MainForm
             RowCount = 4
         };
         configLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
-        configLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        configLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120F));
+        configLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+        configLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
         configLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
-        configLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
-        configLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 86F));
+        configLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48F));
+        configLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 110F));
         configLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
         var lblCsv = new Label
@@ -157,7 +162,8 @@ partial class MainForm
         txtCsvComuni.Dock = DockStyle.Fill;
         txtCsvComuni.Font = new Font("Segoe UI", 9F);
         btnBrowseCsvComuni.Text = "Sfoglia...";
-        btnBrowseCsvComuni.Dock = DockStyle.Fill;
+        btnBrowseCsvComuni.AutoSize = true;
+        btnBrowseCsvComuni.Margin = new Padding(0, 0, 6, 0);
 
         var lblParola = new Label
         {
@@ -166,36 +172,81 @@ partial class MainForm
             Dock = DockStyle.Fill,
             Font = new Font("Segoe UI", 9F)
         };
-        txtParolaCerca.Dock = DockStyle.Left;
+        txtParolaCerca.Dock = DockStyle.Fill;
         txtParolaCerca.Font = new Font("Segoe UI", 9F);
-        txtParolaCerca.Width = 280;
         txtParolaCerca.Text = "Pro Loco";
+
+        var csvActionsPanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Padding = new Padding(0, 4, 0, 0)
+        };
+        csvActionsPanel.Controls.Add(btnBrowseCsvComuni);
+
+        var regionePanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Padding = new Padding(0, 4, 0, 0)
+        };
+        var lblRegione = new Label
+        {
+            Text = "Regione:",
+            AutoSize = true,
+            Margin = new Padding(0, 8, 6, 0),
+            Font = new Font("Segoe UI", 9F)
+        };
+        cmbRegione.DropDownStyle = ComboBoxStyle.DropDownList;
+        cmbRegione.Font = new Font("Segoe UI", 9F);
+        cmbRegione.Width = 220;
+        cmbRegione.Items.AddRange(new object[]
+        {
+            "Tutte le regioni", "Abruzzo", "Basilicata", "Calabria", "Campania",
+            "Emilia-Romagna", "Friuli-Venezia Giulia", "Lazio", "Liguria",
+            "Lombardia", "Marche", "Molise", "Piemonte", "Puglia", "Sardegna",
+            "Sicilia", "Toscana", "Trentino-Alto Adige", "Umbria", "Valle d'Aosta", "Veneto"
+        });
+        cmbRegione.SelectedIndex = 0;
+        btnImportaComuni.Text = "Importa Comuni";
+        btnImportaComuni.AutoSize = true;
+        btnImportaComuni.Margin = new Padding(8, 0, 0, 0);
+        regionePanel.Controls.AddRange(new Control[] { lblRegione, cmbRegione, btnImportaComuni });
 
         var panelsLayout = new TableLayoutPanel
         {
             ColumnCount = 2,
             Dock = DockStyle.Fill,
-            Margin = new Padding(0, 4, 0, 4)
+            Margin = new Padding(0, 6, 0, 6),
+            RowCount = 1
         };
         panelsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 280F));
         panelsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        panelsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 100F));
 
         var groupModalita = new GroupBox
         {
             Text = "Modalità risultato:",
             Dock = DockStyle.Fill,
-            Font = new Font("Segoe UI", 9F)
+            Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+            Padding = new Padding(12, 8, 12, 12)
         };
         var modalitaPanel = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.TopDown,
-            Padding = new Padding(10, 10, 0, 0),
+            Padding = new Padding(6, 6, 6, 6),
             WrapContents = false
         };
         rbRisultatoUnivoco.Text = "Risultato univoco";
         rbRisultatoUnivoco.Checked = true;
+        rbRisultatoUnivoco.AutoSize = true;
+        rbRisultatoUnivoco.Margin = new Padding(0, 0, 16, 6);
         rbMultiRisultato.Text = "Multi risultato";
+        rbMultiRisultato.AutoSize = true;
+        rbMultiRisultato.Margin = new Padding(0, 0, 16, 6);
         modalitaPanel.Controls.AddRange(new Control[] { rbRisultatoUnivoco, rbMultiRisultato });
         groupModalita.Controls.Add(modalitaPanel);
 
@@ -203,22 +254,33 @@ partial class MainForm
         {
             Text = "Dati da cercare:",
             Dock = DockStyle.Fill,
-            Font = new Font("Segoe UI", 9F)
+            Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+            Padding = new Padding(12, 8, 12, 12)
         };
         var datiPanel = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(10, 12, 10, 10)
+            Padding = new Padding(6, 6, 6, 6)
         };
         chkEmail.Text = "Email";
         chkEmail.Checked = true;
+        chkEmail.AutoSize = true;
+        chkEmail.Margin = new Padding(0, 0, 16, 6);
         chkPec.Text = "PEC";
         chkPec.Checked = true;
+        chkPec.AutoSize = true;
+        chkPec.Margin = new Padding(0, 0, 16, 6);
         chkTelefono.Text = "Telefono";
         chkTelefono.Checked = true;
+        chkTelefono.AutoSize = true;
+        chkTelefono.Margin = new Padding(0, 0, 16, 6);
         chkSitoWeb.Text = "Sito Web";
         chkSitoWeb.Checked = true;
+        chkSitoWeb.AutoSize = true;
+        chkSitoWeb.Margin = new Padding(0, 0, 16, 6);
         chkIndirizzo.Text = "Indirizzo";
+        chkIndirizzo.AutoSize = true;
+        chkIndirizzo.Margin = new Padding(0, 0, 16, 6);
         datiPanel.Controls.AddRange(new Control[] { chkEmail, chkPec, chkTelefono, chkSitoWeb, chkIndirizzo });
         groupDati.Controls.Add(datiPanel);
 
@@ -266,10 +328,10 @@ partial class MainForm
 
         configLayout.Controls.Add(lblCsv, 0, 0);
         configLayout.Controls.Add(txtCsvComuni, 1, 0);
-        configLayout.Controls.Add(btnBrowseCsvComuni, 2, 0);
+        configLayout.Controls.Add(csvActionsPanel, 2, 0);
         configLayout.Controls.Add(lblParola, 0, 1);
         configLayout.Controls.Add(txtParolaCerca, 1, 1);
-        configLayout.SetColumnSpan(txtParolaCerca, 2);
+        configLayout.Controls.Add(regionePanel, 2, 1);
         configLayout.Controls.Add(panelsLayout, 0, 2);
         configLayout.SetColumnSpan(panelsLayout, 3);
         configLayout.Controls.Add(settingsPanel, 0, 3);

@@ -1010,16 +1010,16 @@
     ]
   },
   "packageFolders": {
-    "/tmp/codeql-scratch-3bf94c9b5312e19f/dbs/csharp/working/packages": {}
+    "/tmp/codeql-scratch-cbdbbcd2338fb0ff/dbs/csharp/working/packages": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "/tmp/workspace/simonedeitos/runts/runts/EasySearch.csproj",
+      "projectUniqueName": "/home/runner/work/runts/runts/simonedeitos/runts/runts/EasySearch.csproj",
       "projectName": "EasySearch",
-      "projectPath": "/tmp/workspace/simonedeitos/runts/runts/EasySearch.csproj",
-      "packagesPath": "/tmp/codeql-scratch-3bf94c9b5312e19f/dbs/csharp/working/packages",
-      "outputPath": "/tmp/workspace/simonedeitos/runts/runts/obj/",
+      "projectPath": "/home/runner/work/runts/runts/simonedeitos/runts/runts/EasySearch.csproj",
+      "packagesPath": "/tmp/codeql-scratch-cbdbbcd2338fb0ff/dbs/csharp/working/packages",
+      "outputPath": "/home/runner/work/runts/runts/simonedeitos/runts/runts/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "/home/runner/.nuget/NuGet/NuGet.Config"
