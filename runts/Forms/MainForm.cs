@@ -34,6 +34,7 @@ public partial class MainForm : Form
 
         gridEnti.DataSource = _rows;
         btnBrowseCsvComuni.Click += BtnBrowseCsvComuni_Click;
+        btnImportaComuni.Click += async (_, _) => await ImportaComuniAsync();
         btnAvvia.Click += async (_, _) => await AvviaRicercaAsync();
         btnPausa.Click += (_, _) => PauseProcessing();
         btnRiprendi.Click += (_, _) => ResumeProcessing();
@@ -47,14 +48,12 @@ public partial class MainForm : Form
         UpdateStats(new EnteStatistiche());
     }
 
-    private async Task LoadDataAsync()
+    private Task LoadDataAsync()
     {
         txtCsvComuni.Text = RegistrySettingsManager.GetComuniCsvPath() ?? string.Empty;
         txtParolaCerca.Text = string.IsNullOrWhiteSpace(txtParolaCerca.Text) ? "Pro Loco" : txtParolaCerca.Text;
-        lblFonte.Text = string.IsNullOrWhiteSpace(txtCsvComuni.Text)
-            ? "Fonte dati: selezionare un CSV comuni ISTAT"
-            : $"Fonte dati: CSV ISTAT ({Path.GetFileName(txtCsvComuni.Text)})";
-        await RefreshGridAsync();
+        lblFonte.Text = "Fonte dati: selezionare un CSV e importare i comuni";
+        return Task.CompletedTask;
     }
 
     private async Task RefreshGridAsync(CancellationToken cancellationToken = default)
@@ -348,6 +347,49 @@ public partial class MainForm : Form
         settingsForm.ShowDialog(this);
     }
 
+    private async Task ImportaComuniAsync()
+    {
+        try
+        {
+            var csvPath = GetCsvComuniPath();
+            var searchWord = GetSearchWord();
+            var selectedRegione = GetSelectedRegione();
+            var isAllRegions = selectedRegione.Equals("Tutte le regioni", StringComparison.OrdinalIgnoreCase);
+
+            btnImportaComuni.Enabled = false;
+            btnBrowseCsvComuni.Enabled = false;
+            btnAvvia.Enabled = false;
+            txtCsvComuni.Enabled = false;
+            txtParolaCerca.Enabled = false;
+            cmbRegione.Enabled = false;
+            var comuni = await _istatComuniImporter.LoadComuniAsync(csvPath);
+            if (!isAllRegions)
+            {
+                comuni = _istatComuniImporter.FilterByRegione(comuni, selectedRegione);
+            }
+
+            var enti = comuni.Select(comune => CreateEnteFromComune(comune, searchWord)).ToList();
+            await _csvManager.ReplaceAllAsync(enti);
+            await RefreshGridAsync();
+
+            RegistrySettingsManager.SaveComuniCsvPath(csvPath);
+            lblFonte.Text = $"Fonte dati: CSV ISTAT ({Path.GetFileName(csvPath)})";
+            MessageBox.Show(
+                $"Importati {enti.Count} comuni per {selectedRegione}",
+                Text,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Errore durante l'importazione dei comuni:\n\n{ex.Message}", Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            SetProcessingControls(false);
+        }
+    }
+
     private SearchOptions GetSearchOptions() => new(
         chkEmail.Checked,
         chkPec.Checked,
@@ -358,6 +400,8 @@ public partial class MainForm : Form
         (int)numDelay.Value);
 
     private string GetSearchWord() => string.IsNullOrWhiteSpace(txtParolaCerca.Text) ? "Pro Loco" : txtParolaCerca.Text.Trim();
+
+    private string GetSelectedRegione() => cmbRegione.SelectedItem?.ToString() ?? "Tutte le regioni";
 
     private string BuildDefaultExportCsvFileName()
     {
@@ -408,11 +452,13 @@ public partial class MainForm : Form
     private void SetProcessingControls(bool isProcessing)
     {
         btnAvvia.Enabled = !isProcessing;
+        btnImportaComuni.Enabled = !isProcessing;
         btnBrowseCsvComuni.Enabled = !isProcessing;
         btnExportCsv.Enabled = !isProcessing;
         btnExportExcel.Enabled = !isProcessing;
         txtCsvComuni.Enabled = !isProcessing;
         txtParolaCerca.Enabled = !isProcessing;
+        cmbRegione.Enabled = !isProcessing;
         rbRisultatoUnivoco.Enabled = !isProcessing;
         rbMultiRisultato.Enabled = !isProcessing;
         chkEmail.Enabled = !isProcessing;
