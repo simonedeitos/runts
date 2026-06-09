@@ -83,12 +83,42 @@ public partial class MainForm : Form
     {
         try
         {
-            var csvPath = GetCsvComuniPath();
+            if (_rows.Count == 0)
+            {
+                MessageBox.Show(
+                    "Nessun comune da elaborare.\n\nClicca prima su 'Importa Comuni' per caricare i comuni dalla regione desiderata.",
+                    Text,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
             var searchWord = GetSearchWord();
-            var comuni = await _istatComuniImporter.LoadComuniAsync(csvPath);
+            var outputFile = GetOutputCsvPath();
+            if (string.IsNullOrWhiteSpace(outputFile))
+            {
+                return;
+            }
+
+            var comuni = _rows
+                .Select(ente => new ComuneIstat
+                {
+                    Nome = ente.Comune,
+                    Regione = ente.Regione,
+                    Provincia = ente.Provincia,
+                    SiglaProvincia = ente.Provincia
+                })
+                .Distinct(new ComuneIstatComparer())
+                .ToList();
+
             if (comuni.Count == 0)
             {
-                throw new InvalidOperationException("Il CSV selezionato non contiene comuni validi.");
+                MessageBox.Show(
+                    "I dati importati non contengono comuni validi per avviare la ricerca.",
+                    Text,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
             }
 
             _cts?.Cancel();
@@ -96,14 +126,13 @@ public partial class MainForm : Form
             _pauseEvent.Set();
 
             SetProcessingControls(true);
-            ResetProgress(csvPath, comuni.Count);
-            await _csvManager.ReplaceAllAsync([], _cts.Token);
-            SafeUiInvoke(() => _rows.Clear());
+            ResetProgress(outputFile, comuni.Count);
 
             var headless = !chkShowChrome.Checked;
             using var puppeteer = new PuppeteerHelper(_logger, headless);
             await puppeteer.InitializeAsync(_cts.Token);
             var comuniSearchEngine = new ComuniSearchEngine(_logger, puppeteer);
+            await using var csvWriter = new CsvWriterService(outputFile);
             var stats = new EnteStatistiche { TotaleEnti = comuni.Count };
             var workerCount = (int)numThread.Value;
             var nextIndex = -1;
@@ -111,7 +140,7 @@ public partial class MainForm : Form
             var options = GetSearchOptions();
 
             UpdateStatus($"Avvio ricerca per {comuni.Count} comuni", 0, resetQueue: true);
-            lblFonte.Text = $"Fonte dati: CSV ISTAT ({Path.GetFileName(csvPath)})";
+            lblFonte.Text = $"Salvando risultati in: {Path.GetFileName(outputFile)}";
 
             var workers = Enumerable.Range(0, workerCount).Select(_ => Task.Run(async () =>
             {
@@ -127,6 +156,10 @@ public partial class MainForm : Form
                     var comune = comuni[index];
                     var result = await ProcessComuneAsync(comune, searchWord, comuniSearchEngine, options, headless, _cts.Token);
                     await _csvManager.UpsertManyAsync(result.Rows, _cts.Token);
+                    foreach (var row in result.Rows)
+                    {
+                        await csvWriter.WriteRowAsync(row, _cts.Token);
+                    }
 
                     lock (statsLock)
                     {
@@ -150,7 +183,7 @@ public partial class MainForm : Form
                             Errori = stats.Errori
                         });
                         var percentage = stats.TotaleEnti == 0 ? 0 : (int)Math.Round(stats.Elaborati / (double)stats.TotaleEnti * 100);
-                        lblFonte.Text = $"Fonte dati: [{stats.Elaborati}/{stats.TotaleEnti}] {comune.Nome} ({comune.SiglaProvincia})";
+                        lblFonte.Text = $"[{stats.Elaborati}/{stats.TotaleEnti}] {comune.Nome} ({comune.SiglaProvincia}) → {Path.GetFileName(outputFile)}";
                         UpdateStatus($"{result.StatusMessage} ({percentage}%)", stats.Elaborati);
                     });
                 }
@@ -158,9 +191,17 @@ public partial class MainForm : Form
 
             await Task.WhenAll(workers);
             await RefreshGridAsync(_cts.Token);
-            lblFonte.Text = $"Fonte dati: CSV ISTAT ({Path.GetFileName(csvPath)})";
+            lblFonte.Text = $"Risultati salvati in: {Path.GetFileName(outputFile)}";
             UpdateStatus("Ricerca completata", progressBar.Maximum);
-            MessageBox.Show("Ricerca completata con successo.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(
+                $"✓ Ricerca completata con successo!\n\n" +
+                $"Comuni elaborati: {stats.Elaborati}\n" +
+                $"Siti trovati: {stats.SitiTrovati}\n" +
+                $"Email trovate: {stats.EmailTrovate}\n\n" +
+                $"Risultati salvati in:\n{outputFile}",
+                Text,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
         }
         catch (OperationCanceledException)
         {
@@ -465,6 +506,23 @@ public partial class MainForm : Form
         return $"{nomeRicerca}_{nomeComune}_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
     }
 
+    private string GetOutputCsvPath()
+    {
+        var searchWord = NormalizeFileNamePart(GetSearchWord());
+        var regione = _rows.FirstOrDefault()?.Regione ?? "italia";
+        var regioneNormalized = NormalizeFileNamePart(regione);
+
+        using var dialog = new SaveFileDialog
+        {
+            Filter = "CSV files (*.csv)|*.csv",
+            FileName = $"{searchWord}_{regioneNormalized}_{DateTime.Now:yyyyMMdd_HHmmss}.csv",
+            Title = "Salva risultati ricerca",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory)
+        };
+
+        return dialog.ShowDialog(this) == DialogResult.OK ? dialog.FileName : string.Empty;
+    }
+
     private static string NormalizeFileNamePart(string value)
     {
         var invalidChars = Path.GetInvalidFileNameChars();
@@ -616,6 +674,32 @@ public partial class MainForm : Form
             Categoria = searchWord,
             Stato = StatoEnte.DA_ELABORARE
         };
+    }
+
+    private sealed class ComuneIstatComparer : IEqualityComparer<ComuneIstat>
+    {
+        public bool Equals(ComuneIstat? x, ComuneIstat? y)
+        {
+            if (ReferenceEquals(x, y))
+            {
+                return true;
+            }
+
+            if (x is null || y is null)
+            {
+                return false;
+            }
+
+            return string.Equals(x.Nome, y.Nome, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(x.Regione, y.Regione, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public int GetHashCode(ComuneIstat obj)
+        {
+            return HashCode.Combine(
+                obj.Nome.ToUpperInvariant(),
+                obj.Regione.ToUpperInvariant());
+        }
     }
 
     private void SafeUiInvoke(Action action)
