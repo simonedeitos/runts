@@ -1,4 +1,4 @@
-namespace runts.Models;
+namespace EasySearch.Models;
 
 /// <summary>
 /// Rappresenta un comune ISTAT importato da CSV ufficiale.

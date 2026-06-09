@@ -1,8 +1,8 @@
-namespace runts.Helpers;
+namespace EasySearch.Helpers;
 
 public static class HttpClientHelper
 {
-    private const string DefaultUserAgent = "RUNTS-Contact-Finder/1.0 (+https://github.com/simonedeitos/runts)";
+    private const string DefaultUserAgent = "EasySearch/1.0 (+https://github.com/simonedeitos/runts)";
 
     public static HttpClient CreateDefaultClient(IServiceProvider _)
         => CreateClient(TimeSpan.FromSeconds(15));

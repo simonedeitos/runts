@@ -1,10 +1,10 @@
 using CsvHelper;
 using CsvHelper.Configuration;
-using runts.Helpers;
-using runts.Models;
+using EasySearch.Helpers;
+using EasySearch.Models;
 using System.Globalization;
 
-namespace runts.Services;
+namespace EasySearch.Services;
 
 /// <summary>
 /// Gestisce lettura/scrittura del file Enti.csv in modo thread-safe.
@@ -36,10 +36,25 @@ public sealed class CsvManager
         await _lock.WaitAsync(cancellationToken);
         try
         {
-            await using var stream = File.Open(FileHelper.EntiFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            using var reader = new StreamReader(stream);
-            using var csv = new CsvReader(reader, BuildConfig());
-            return csv.GetRecords<Ente>().ToList();
+            return await InternalLoadAsync(cancellationToken);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    public async Task ReplaceAllAsync(IEnumerable<Ente> enti, CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await InternalSaveAsync(
+                enti.GroupBy(BuildUniqueKey, StringComparer.OrdinalIgnoreCase).Select(g => g.First())
+                    .OrderBy(x => x.Regione)
+                    .ThenBy(x => x.Comune)
+                    .ThenBy(x => x.Denominazione),
+                cancellationToken);
         }
         finally
         {
@@ -65,7 +80,7 @@ public sealed class CsvManager
                 byKey[BuildUniqueKey(ente)] = ente;
             }
 
-            await InternalSaveAsync(byKey.Values.OrderBy(x => x.Regione).ThenBy(x => x.Denominazione), cancellationToken);
+            await InternalSaveAsync(byKey.Values.OrderBy(x => x.Regione).ThenBy(x => x.Comune).ThenBy(x => x.Denominazione), cancellationToken);
         }
         finally
         {
@@ -84,8 +99,13 @@ public sealed class CsvManager
             if (index >= 0)
             {
                 all[index] = entity;
-                await InternalSaveAsync(all, cancellationToken);
             }
+            else
+            {
+                all.Add(entity);
+            }
+
+            await InternalSaveAsync(all.OrderBy(x => x.Regione).ThenBy(x => x.Comune).ThenBy(x => x.Denominazione), cancellationToken);
         }
         finally
         {
@@ -93,7 +113,7 @@ public sealed class CsvManager
         }
     }
 
-    private async Task<List<Ente>> InternalLoadAsync(CancellationToken cancellationToken)
+    private static async Task<List<Ente>> InternalLoadAsync(CancellationToken cancellationToken)
     {
         await using var stream = File.Open(FileHelper.EntiFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         using var reader = new StreamReader(stream);
@@ -116,8 +136,16 @@ public sealed class CsvManager
             return $"CF:{ente.CodiceFiscale.Trim().ToUpperInvariant()}";
         }
 
-        return $"ALT:{ente.Regione.Trim().ToUpperInvariant()}|{ente.Comune.Trim().ToUpperInvariant()}|{ente.Categoria.Trim().ToUpperInvariant()}";
+        return string.Join('|',
+            "ALT",
+            NormalizeKeyPart(ente.Regione),
+            NormalizeKeyPart(ente.Comune),
+            NormalizeKeyPart(ente.Categoria),
+            NormalizeKeyPart(ente.Denominazione),
+            NormalizeKeyPart(ente.SitoWeb));
     }
+
+    private static string NormalizeKeyPart(string? value) => (value ?? string.Empty).Trim().ToUpperInvariant();
 
     private static async Task InternalSaveAsync(IEnumerable<Ente> enti, CancellationToken cancellationToken)
     {

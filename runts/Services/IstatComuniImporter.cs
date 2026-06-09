@@ -1,10 +1,10 @@
 using CsvHelper;
 using CsvHelper.Configuration;
-using runts.Models;
+using EasySearch.Models;
 using System.Globalization;
 using System.Text;
 
-namespace runts.Services;
+namespace EasySearch.Services;
 
 /// <summary>
 /// Importa la lista ufficiale dei comuni ISTAT da CSV.

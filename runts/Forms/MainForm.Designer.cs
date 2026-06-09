@@ -1,34 +1,44 @@
 #nullable disable
-namespace runts.Forms;
+namespace EasySearch.Forms;
 
 partial class MainForm
 {
     private System.ComponentModel.IContainer components = null;
-    private ComboBox cmbModalita = null!;
-    private ComboBox cmbRegione = null!;
-    private Button btnImporta = null!;
-    private Button btnAvvia = null!;
-    private Button btnPausa = null!;
-    private Button btnRiprendi = null!;
-    private Button btnFerma = null!;
-    private Button btnExportCsv = null!;
-    private Button btnExportExcel = null!;
-    private Label lblCsvComuni = null!;
-    private TextBox txtCsvComuni = null!;
-    private Button btnBrowseCsvComuni = null!;
-    private NumericUpDown numThread = null!;
-    private CheckBox chkShowChrome = null!;
-    private NumericUpDown numDelay = null!;
-    private Label lblTotale = null!;
-    private Label lblElaborati = null!;
-    private Label lblSiti = null!;
-    private Label lblEmail = null!;
-    private Label lblPec = null!;
-    private Label lblErrori = null!;
-    private Label lblFonte = null!;
-    private Label lblStatusComuni = null!;
-    private ProgressBar progressBar = null!;
-    private DataGridView gridEnti = null!;
+    private MenuStrip menuStripMain;
+    private ToolStripMenuItem menuImpostazioni;
+    private ToolStripMenuItem menuConfiguraBrightData;
+    private GroupBox groupConfigurazione;
+    private TextBox txtCsvComuni;
+    private Button btnBrowseCsvComuni;
+    private TextBox txtParolaCerca;
+    private RadioButton rbRisultatoUnivoco;
+    private RadioButton rbMultiRisultato;
+    private CheckBox chkEmail;
+    private CheckBox chkPec;
+    private CheckBox chkTelefono;
+    private CheckBox chkSitoWeb;
+    private CheckBox chkIndirizzo;
+    private NumericUpDown numThread;
+    private NumericUpDown numDelay;
+    private CheckBox chkShowChrome;
+    private Button btnAvvia;
+    private Button btnPausa;
+    private Button btnRiprendi;
+    private Button btnFerma;
+    private Button btnExportCsv;
+    private Button btnExportExcel;
+    private Label lblTotale;
+    private Label lblElaborati;
+    private Label lblSiti;
+    private Label lblEmail;
+    private Label lblPec;
+    private Label lblErrori;
+    private Label lblFonte;
+    private Label lblStatusComuni;
+    private ProgressBar progressBar;
+    private DataGridView gridEnti;
+    private GroupBox groupRisultati;
+    private TableLayoutPanel tableRoot;
 
     protected override void Dispose(bool disposing)
     {
@@ -36,29 +46,38 @@ partial class MainForm
         {
             components?.Dispose();
         }
-        #nullable restore
 
+        #nullable restore
         base.Dispose(disposing);
     }
 
     private void InitializeComponent()
     {
         components = new System.ComponentModel.Container();
-        cmbModalita = new ComboBox();
-        cmbRegione = new ComboBox();
-        btnImporta = new Button();
+        menuStripMain = new MenuStrip();
+        menuImpostazioni = new ToolStripMenuItem();
+        menuConfiguraBrightData = new ToolStripMenuItem();
+        tableRoot = new TableLayoutPanel();
+        groupConfigurazione = new GroupBox();
+        txtCsvComuni = new TextBox();
+        btnBrowseCsvComuni = new Button();
+        txtParolaCerca = new TextBox();
+        rbRisultatoUnivoco = new RadioButton();
+        rbMultiRisultato = new RadioButton();
+        chkEmail = new CheckBox();
+        chkPec = new CheckBox();
+        chkTelefono = new CheckBox();
+        chkSitoWeb = new CheckBox();
+        chkIndirizzo = new CheckBox();
+        numThread = new NumericUpDown();
+        numDelay = new NumericUpDown();
+        chkShowChrome = new CheckBox();
         btnAvvia = new Button();
         btnPausa = new Button();
         btnRiprendi = new Button();
         btnFerma = new Button();
         btnExportCsv = new Button();
         btnExportExcel = new Button();
-        lblCsvComuni = new Label();
-        txtCsvComuni = new TextBox();
-        btnBrowseCsvComuni = new Button();
-        numThread = new NumericUpDown();
-        chkShowChrome = new CheckBox();
-        numDelay = new NumericUpDown();
         lblTotale = new Label();
         lblElaborati = new Label();
         lblSiti = new Label();
@@ -68,170 +87,262 @@ partial class MainForm
         lblFonte = new Label();
         lblStatusComuni = new Label();
         progressBar = new ProgressBar();
+        groupRisultati = new GroupBox();
         gridEnti = new DataGridView();
-        var lblModalita = new Label();
-        var lblThread = new Label();
-        var lblDelay = new Label();
-        var toolTip = new ToolTip(components);
-
+        ((System.ComponentModel.ISupportInitialize)numThread).BeginInit();
+        ((System.ComponentModel.ISupportInitialize)numDelay).BeginInit();
+        ((System.ComponentModel.ISupportInitialize)gridEnti).BeginInit();
         SuspendLayout();
 
-        Text = "RUNTS CONTACT FINDER";
-        ClientSize = new Size(1280, 760);
-        MinimumSize = new Size(1024, 700);
+        AutoScaleDimensions = new SizeF(7F, 15F);
+        AutoScaleMode = AutoScaleMode.Font;
+        BackColor = Color.White;
+        ClientSize = new Size(1500, 900);
+        MinimumSize = new Size(1400, 800);
         StartPosition = FormStartPosition.CenterScreen;
+        Text = "EASYSEARCH";
 
-        lblModalita.Text = "Modalità importazione";
-        lblModalita.Location = new Point(20, 22);
-        lblModalita.Size = new Size(130, 24);
+        menuStripMain.BackColor = Color.White;
+        menuStripMain.Dock = DockStyle.Top;
+        menuStripMain.Items.AddRange(new ToolStripItem[] { menuImpostazioni });
+        menuStripMain.Padding = new Padding(12, 4, 12, 4);
+        menuStripMain.TabIndex = 0;
+        menuStripMain.Text = "menuStripMain";
 
-        cmbModalita.DropDownStyle = ComboBoxStyle.DropDownList;
-        cmbModalita.Location = new Point(160, 20);
-        cmbModalita.Size = new Size(280, 28);
+        menuImpostazioni.Alignment = ToolStripItemAlignment.Right;
+        menuImpostazioni.DropDownItems.AddRange(new ToolStripItem[] { menuConfiguraBrightData });
+        menuImpostazioni.Text = "Impostazioni";
 
-        cmbRegione.DropDownStyle = ComboBoxStyle.DropDownList;
-        cmbRegione.Location = new Point(450, 20);
-        cmbRegione.Size = new Size(190, 28);
+        menuConfiguraBrightData.Text = "Configura Bright Data API";
 
-        btnImporta.Text = "Importa Regione";
-        btnImporta.Location = new Point(650, 18);
-        btnImporta.Size = new Size(130, 32);
+        tableRoot.ColumnCount = 1;
+        tableRoot.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        tableRoot.Dock = DockStyle.Fill;
+        tableRoot.Location = new Point(0, 32);
+        tableRoot.Padding = new Padding(12);
+        tableRoot.RowCount = 6;
+        tableRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 250F));
+        tableRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
+        tableRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));
+        tableRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));
+        tableRoot.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
+        tableRoot.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
-        btnAvvia.Text = "Avvia Ricerca";
-        btnAvvia.Location = new Point(790, 18);
-        btnAvvia.Size = new Size(120, 32);
+        groupConfigurazione.Dock = DockStyle.Fill;
+        groupConfigurazione.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+        groupConfigurazione.Text = "Configurazione ricerca";
+        groupConfigurazione.Padding = new Padding(12);
 
-        btnPausa.Text = "Pausa";
-        btnPausa.Location = new Point(920, 18);
-        btnPausa.Size = new Size(80, 32);
+        var configLayout = new TableLayoutPanel
+        {
+            ColumnCount = 3,
+            Dock = DockStyle.Fill,
+            RowCount = 4
+        };
+        configLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150F));
+        configLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        configLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120F));
+        configLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
+        configLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
+        configLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 86F));
+        configLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
-        btnRiprendi.Text = "Riprendi";
-        btnRiprendi.Location = new Point(1010, 18);
-        btnRiprendi.Size = new Size(80, 32);
-
-        btnFerma.Text = "Ferma";
-        btnFerma.Location = new Point(1100, 18);
-        btnFerma.Size = new Size(80, 32);
-
-        btnExportCsv.Text = "Esporta CSV Regione";
-        btnExportCsv.Location = new Point(860, 58);
-        btnExportCsv.Size = new Size(160, 32);
-
-        btnExportExcel.Text = "Esporta Excel Regione";
-        btnExportExcel.Location = new Point(1030, 58);
-        btnExportExcel.Size = new Size(170, 32);
-
-        lblCsvComuni.Text = "CSV comuni ISTAT";
-        lblCsvComuni.Location = new Point(20, 64);
-        lblCsvComuni.Size = new Size(130, 24);
-
-        txtCsvComuni.Location = new Point(160, 60);
-        txtCsvComuni.Size = new Size(590, 27);
-
+        var lblCsv = new Label
+        {
+            Text = "CSV comuni ISTAT:",
+            TextAlign = ContentAlignment.MiddleLeft,
+            Dock = DockStyle.Fill,
+            Font = new Font("Segoe UI", 9F)
+        };
+        txtCsvComuni.Dock = DockStyle.Fill;
+        txtCsvComuni.Font = new Font("Segoe UI", 9F);
         btnBrowseCsvComuni.Text = "Sfoglia...";
-        btnBrowseCsvComuni.Location = new Point(760, 58);
-        btnBrowseCsvComuni.Size = new Size(90, 32);
+        btnBrowseCsvComuni.Dock = DockStyle.Fill;
 
-        lblThread.Text = "Numero Thread";
-        lblThread.Location = new Point(20, 98);
-        lblThread.Size = new Size(110, 24);
+        var lblParola = new Label
+        {
+            Text = "Parola da cercare:",
+            TextAlign = ContentAlignment.MiddleLeft,
+            Dock = DockStyle.Fill,
+            Font = new Font("Segoe UI", 9F)
+        };
+        txtParolaCerca.Dock = DockStyle.Left;
+        txtParolaCerca.Font = new Font("Segoe UI", 9F);
+        txtParolaCerca.Width = 280;
+        txtParolaCerca.Text = "Pro Loco";
 
+        var panelsLayout = new TableLayoutPanel
+        {
+            ColumnCount = 2,
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0, 4, 0, 4)
+        };
+        panelsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 280F));
+        panelsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+
+        var groupModalita = new GroupBox
+        {
+            Text = "Modalità risultato:",
+            Dock = DockStyle.Fill,
+            Font = new Font("Segoe UI", 9F)
+        };
+        var modalitaPanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            Padding = new Padding(10, 10, 0, 0),
+            WrapContents = false
+        };
+        rbRisultatoUnivoco.Text = "Risultato univoco";
+        rbRisultatoUnivoco.Checked = true;
+        rbMultiRisultato.Text = "Multi risultato";
+        modalitaPanel.Controls.AddRange(new Control[] { rbRisultatoUnivoco, rbMultiRisultato });
+        groupModalita.Controls.Add(modalitaPanel);
+
+        var groupDati = new GroupBox
+        {
+            Text = "Dati da cercare:",
+            Dock = DockStyle.Fill,
+            Font = new Font("Segoe UI", 9F)
+        };
+        var datiPanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(10, 12, 10, 10)
+        };
+        chkEmail.Text = "Email";
+        chkEmail.Checked = true;
+        chkPec.Text = "PEC";
+        chkPec.Checked = true;
+        chkTelefono.Text = "Telefono";
+        chkTelefono.Checked = true;
+        chkSitoWeb.Text = "Sito Web";
+        chkSitoWeb.Checked = true;
+        chkIndirizzo.Text = "Indirizzo";
+        datiPanel.Controls.AddRange(new Control[] { chkEmail, chkPec, chkTelefono, chkSitoWeb, chkIndirizzo });
+        groupDati.Controls.Add(datiPanel);
+
+        panelsLayout.Controls.Add(groupModalita, 0, 0);
+        panelsLayout.Controls.Add(groupDati, 1, 0);
+
+        var settingsPanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            Padding = new Padding(0, 6, 0, 0)
+        };
+        var lblThread = new Label { Text = "Thread:", AutoSize = true, Margin = new Padding(0, 8, 6, 0) };
         numThread.Minimum = 1;
         numThread.Maximum = 10;
         numThread.Value = 3;
-        numThread.Location = new Point(135, 96);
-        numThread.Size = new Size(80, 27);
-
-        chkShowChrome.Text = "Mostra finestre Chrome (debug)";
-        chkShowChrome.Location = new Point(20, 128);
-        chkShowChrome.Size = new Size(260, 24);
-        chkShowChrome.Checked = false;
-
-        lblDelay.Text = "Delay richieste (ms)";
-        lblDelay.Location = new Point(240, 98);
-        lblDelay.Size = new Size(140, 24);
-
+        numThread.Width = 70;
+        var lblDelay = new Label { Text = "Delay (ms):", AutoSize = true, Margin = new Padding(20, 8, 6, 0) };
         numDelay.Minimum = 100;
         numDelay.Maximum = 5000;
         numDelay.Value = 500;
         numDelay.Increment = 100;
-        numDelay.Location = new Point(390, 96);
-        numDelay.Size = new Size(100, 27);
+        numDelay.Width = 90;
+        chkShowChrome.Text = "Mostra Chrome (debug)";
+        chkShowChrome.AutoSize = true;
+        chkShowChrome.Margin = new Padding(20, 6, 12, 0);
+        btnAvvia.Text = "Avvia Ricerca";
+        btnPausa.Text = "Pausa";
+        btnRiprendi.Text = "Riprendi";
+        btnFerma.Text = "Ferma";
+        btnExportCsv.Text = "Esporta CSV";
+        btnExportExcel.Text = "Esporta Excel";
+        btnAvvia.Size = new Size(120, 34);
+        btnPausa.Size = new Size(90, 34);
+        btnRiprendi.Size = new Size(90, 34);
+        btnFerma.Size = new Size(90, 34);
+        btnExportCsv.Size = new Size(110, 34);
+        btnExportExcel.Size = new Size(110, 34);
+        settingsPanel.Controls.AddRange(new Control[]
+        {
+            lblThread, numThread, lblDelay, numDelay, chkShowChrome,
+            btnAvvia, btnPausa, btnRiprendi, btnFerma, btnExportCsv, btnExportExcel
+        });
 
-        progressBar.Location = new Point(20, 158);
-        progressBar.Size = new Size(1150, 22);
+        configLayout.Controls.Add(lblCsv, 0, 0);
+        configLayout.Controls.Add(txtCsvComuni, 1, 0);
+        configLayout.Controls.Add(btnBrowseCsvComuni, 2, 0);
+        configLayout.Controls.Add(lblParola, 0, 1);
+        configLayout.Controls.Add(txtParolaCerca, 1, 1);
+        configLayout.SetColumnSpan(txtParolaCerca, 2);
+        configLayout.Controls.Add(panelsLayout, 0, 2);
+        configLayout.SetColumnSpan(panelsLayout, 3);
+        configLayout.Controls.Add(settingsPanel, 0, 3);
+        configLayout.SetColumnSpan(settingsPanel, 3);
+        groupConfigurazione.Controls.Add(configLayout);
+
+        var statsPanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            Padding = new Padding(0),
+            WrapContents = false
+        };
+        lblTotale.AutoSize = true;
+        lblTotale.Margin = new Padding(0, 8, 24, 0);
+        lblElaborati.AutoSize = true;
+        lblElaborati.Margin = new Padding(0, 8, 24, 0);
+        lblSiti.AutoSize = true;
+        lblSiti.Margin = new Padding(0, 8, 24, 0);
+        lblEmail.AutoSize = true;
+        lblEmail.Margin = new Padding(0, 8, 24, 0);
+        lblPec.AutoSize = true;
+        lblPec.Margin = new Padding(0, 8, 24, 0);
+        lblErrori.AutoSize = true;
+        lblErrori.Margin = new Padding(0, 8, 24, 0);
+        statsPanel.Controls.AddRange(new Control[] { lblTotale, lblElaborati, lblSiti, lblEmail, lblPec, lblErrori });
+
+        progressBar.Dock = DockStyle.Fill;
         progressBar.Style = ProgressBarStyle.Continuous;
-        progressBar.Visible = false;
 
-        lblFonte.Location = new Point(20, 185);
-        lblFonte.Size = new Size(1150, 24);
-        
-        lblStatusComuni.Location = new Point(20, 209);
-        lblStatusComuni.Size = new Size(1150, 66);
-        lblStatusComuni.Text = "Pronto per importazione comuni ISTAT";
-        lblStatusComuni.ForeColor = Color.DarkBlue;
-        lblStatusComuni.Visible = false;
+        lblFonte.Dock = DockStyle.Fill;
+        lblFonte.TextAlign = ContentAlignment.MiddleLeft;
+        lblFonte.Font = new Font("Segoe UI", 9F);
+        lblFonte.Text = "Fonte dati: -";
 
-        lblTotale.Location = new Point(20, 280);
-        lblTotale.Size = new Size(170, 24);
-        lblElaborati.Location = new Point(200, 280);
-        lblElaborati.Size = new Size(170, 24);
-        lblSiti.Location = new Point(380, 280);
-        lblSiti.Size = new Size(170, 24);
-        lblEmail.Location = new Point(560, 280);
-        lblEmail.Size = new Size(170, 24);
-        lblPec.Location = new Point(740, 280);
-        lblPec.Size = new Size(170, 24);
-        lblErrori.Location = new Point(920, 280);
-        lblErrori.Size = new Size(170, 24);
+        lblStatusComuni.Dock = DockStyle.Fill;
+        lblStatusComuni.TextAlign = ContentAlignment.MiddleLeft;
+        lblStatusComuni.Font = new Font("Segoe UI", 9F);
+        lblStatusComuni.ForeColor = Color.DarkSlateBlue;
+        lblStatusComuni.Text = "Pronto";
 
-        gridEnti.Location = new Point(20, 315);
-        gridEnti.Size = new Size(1235, 415);
-        gridEnti.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-        gridEnti.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        groupRisultati.Dock = DockStyle.Fill;
+        groupRisultati.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+        groupRisultati.Text = "Risultati";
+        groupRisultati.Padding = new Padding(12);
+
         gridEnti.AllowUserToAddRows = false;
         gridEnti.AllowUserToDeleteRows = false;
+        gridEnti.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        gridEnti.BackgroundColor = Color.White;
+        gridEnti.BorderStyle = BorderStyle.None;
+        gridEnti.Dock = DockStyle.Fill;
+        gridEnti.MultiSelect = false;
         gridEnti.ReadOnly = true;
+        gridEnti.RowHeadersVisible = false;
+        gridEnti.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        groupRisultati.Controls.Add(gridEnti);
 
-        toolTip.SetToolTip(cmbModalita, "Seleziona la modalità: RUNTS ufficiale, Pro Loco da albo PDF oppure Pro Loco per comune");
-        toolTip.SetToolTip(cmbRegione, "Regione italiana da importare");
-        toolTip.SetToolTip(numThread, "Numero massimo thread di lavoro (1-10)");
-        toolTip.SetToolTip(chkShowChrome, "Se selezionato apre le finestre Chrome durante l'elaborazione");
-        toolTip.SetToolTip(numDelay, "Delay tra richieste HTTP in millisecondi");
-        toolTip.SetToolTip(btnImporta, "Importa enti RUNTS reali, Pro Loco da albi regionali ufficiali PDF o Pro Loco generate dai comuni ISTAT");
-        toolTip.SetToolTip(txtCsvComuni, "Percorso del CSV ufficiale ISTAT dei comuni italiani");
+        tableRoot.Controls.Add(groupConfigurazione, 0, 0);
+        tableRoot.Controls.Add(statsPanel, 0, 1);
+        tableRoot.Controls.Add(progressBar, 0, 2);
+        tableRoot.Controls.Add(lblFonte, 0, 3);
+        tableRoot.Controls.Add(lblStatusComuni, 0, 4);
+        tableRoot.Controls.Add(groupRisultati, 0, 5);
 
-        Controls.AddRange([
-            lblModalita,
-            cmbModalita,
-            cmbRegione,
-            btnImporta,
-            btnAvvia,
-            btnPausa,
-            btnRiprendi,
-            btnFerma,
-            btnExportCsv,
-            btnExportExcel,
-            lblCsvComuni,
-            txtCsvComuni,
-            btnBrowseCsvComuni,
-            lblThread,
-            numThread,
-            chkShowChrome,
-            lblDelay,
-            numDelay,
-            progressBar,
-            lblFonte,
-            lblStatusComuni,
-            lblTotale,
-            lblElaborati,
-            lblSiti,
-            lblEmail,
-            lblPec,
-            lblErrori,
-            gridEnti
-        ]);
+        Controls.Add(tableRoot);
+        Controls.Add(menuStripMain);
+        MainMenuStrip = menuStripMain;
 
+        ((System.ComponentModel.ISupportInitialize)numThread).EndInit();
+        ((System.ComponentModel.ISupportInitialize)numDelay).EndInit();
+        ((System.ComponentModel.ISupportInitialize)gridEnti).EndInit();
         ResumeLayout(false);
+        PerformLayout();
     }
 }

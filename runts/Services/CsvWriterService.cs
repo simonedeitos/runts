@@ -1,7 +1,7 @@
 using System.Text;
-using runts.Models;
+using EasySearch.Models;
 
-namespace runts.Services;
+namespace EasySearch.Services;
 
 /// <summary>
 /// Scrive risultati CSV in modo progressivo con flush immediato.
@@ -15,7 +15,7 @@ public sealed class CsvWriterService : IAsyncDisposable, IDisposable
     public CsvWriterService(string filePath)
     {
         _writer = new StreamWriter(filePath, append: false, Encoding.UTF8);
-        _writer.WriteLine("Denominazione,Codice Fiscale,Categoria,Comune,Provincia,Sito Web,Email,PEC,Telefono,Data Elaborazione");
+        _writer.WriteLine("Regione,Provincia,Comune,Denominazione,Codice Fiscale,Categoria,Sito Web,Email,PEC,Telefono,Indirizzo,Data Elaborazione");
         _writer.Flush();
     }
 
@@ -23,15 +23,17 @@ public sealed class CsvWriterService : IAsyncDisposable, IDisposable
     {
         cancellationToken.ThrowIfCancellationRequested();
         var line = string.Join(',',
+            EscapeCsv(ente.Regione),
+            EscapeCsv(ente.Provincia),
+            EscapeCsv(ente.Comune),
             EscapeCsv(ente.Denominazione),
             EscapeCsv(ente.CodiceFiscale),
             EscapeCsv(ente.Categoria),
-            EscapeCsv(ente.Comune),
-            EscapeCsv(ente.Provincia),
             EscapeCsv(ente.SitoWeb),
             EscapeCsv(ente.Email),
             EscapeCsv(ente.PEC),
             EscapeCsv(ente.Telefono),
+            EscapeCsv(ente.Indirizzo),
             EscapeCsv(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")));
 
         await _writeLock.WaitAsync(cancellationToken);

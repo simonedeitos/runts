@@ -1,8 +1,8 @@
 using PuppeteerSharp;
 using PuppeteerSharp.Input;
-using runts.Services;
+using EasySearch.Services;
 
-namespace runts.Helpers;
+namespace EasySearch.Helpers;
 
 /// <summary>
 /// Helper per automazione browser con PuppeteerSharp e comportamento umano.

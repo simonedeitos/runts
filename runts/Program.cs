@@ -1,13 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
-using runts.Forms;
-using runts.Helpers;
-using runts.Services;
+using EasySearch.Forms;
+using EasySearch.Helpers;
+using EasySearch.Services;
 
-namespace runts;
+namespace EasySearch;
 
-/// <summary>
-/// Entry point applicativo con bootstrap DI e inizializzazione cartelle dati CSV.
-/// </summary>
 internal static class Program
 {
     [STAThread]
@@ -30,8 +27,6 @@ internal static class Program
         services.AddSingleton(HttpClientHelper.CreateDefaultClient);
         services.AddSingleton<LoggerService>();
         services.AddSingleton<CsvManager>();
-        services.AddSingleton<PdfProLocoImporter>();
-        services.AddSingleton<RuntsImporter>();
         services.AddSingleton<SearchEngineService>();
         services.AddSingleton<IstatComuniImporter>();
         services.AddSingleton<WebScraperService>();

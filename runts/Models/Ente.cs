@@ -1,4 +1,4 @@
-namespace runts.Models;
+namespace EasySearch.Models;
 
 public sealed class Ente
 {
@@ -12,7 +12,8 @@ public sealed class Ente
     public string Email { get; set; } = string.Empty;
     public string PEC { get; set; } = string.Empty;
     public string Telefono { get; set; } = string.Empty;
-    public string Stato { get; set; } = StatoEnte.DA_ELABORARE;
+    public string Indirizzo { get; set; } = string.Empty;
+    public string Stato { get; set; } = string.Empty;
     public DateTime? DataUltimoControllo { get; set; }
 }
 

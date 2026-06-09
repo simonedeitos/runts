@@ -1,12 +1,12 @@
-using runts.Helpers;
-using runts.Models;
+using EasySearch.Helpers;
+using EasySearch.Models;
 using System.Globalization;
 using System.Text;
 
-namespace runts.Services;
+namespace EasySearch.Services;
 
 /// <summary>
-/// Ricerca il sito della Pro Loco a partire dal nome del comune ISTAT.
+/// Ricerca il sito di un ente partendo dal nome del comune ISTAT.
 /// </summary>
 public sealed class ComuniSearchEngine
 {
@@ -19,12 +19,21 @@ public sealed class ComuniSearchEngine
         _puppeteer = puppeteer;
     }
 
-    public async Task<string> FindProLocoForComuneAsync(ComuneIstat comune, CancellationToken cancellationToken = default)
+    public async Task<string> FindProLocoForComuneAsync(ComuneIstat comune, string searchWord, CancellationToken cancellationToken = default)
     {
-        var queries = BuildQueries(comune);
+        var results = await FindMultipleForComuneAsync(comune, searchWord, cancellationToken);
+        return results.FirstOrDefault() ?? string.Empty;
+    }
+
+    public async Task<List<string>> FindMultipleForComuneAsync(ComuneIstat comune, string searchWord, CancellationToken cancellationToken = default)
+    {
+        var queries = BuildQueries(comune, searchWord);
+        var matches = new List<string>();
+        var seenDomains = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         await _logger.LogAsync("═══════════════════════════════════════", cancellationToken);
         await _logger.LogAsync($"🏛️ COMUNE: {comune.Nome} ({comune.SiglaProvincia})", cancellationToken);
+        await _logger.LogAsync($"🔎 Ricerca: {searchWord}", cancellationToken);
         await _logger.LogAsync("═══════════════════════════════════════", cancellationToken);
         await _logger.LogAsync($"Query generate: {queries.Count}", cancellationToken);
 
@@ -51,40 +60,53 @@ public sealed class ComuniSearchEngine
             await _logger.LogAsync($"Risultati: {results.Count}", cancellationToken);
             foreach (var url in results)
             {
-                if (IsCandidateMatch(url, comune))
+                if (!IsCandidateMatch(url, comune, searchWord))
                 {
-                    await _logger.LogAsync($"✓ SITO TROVATO: {url}", cancellationToken);
-                    return ExtractDomain(url);
+                    await _logger.LogAsync($"  ✗ Scartato: {url}", cancellationToken);
+                    continue;
                 }
 
-                await _logger.LogAsync($"  ✗ Scartato: {url}", cancellationToken);
+                var domain = ExtractDomain(url);
+                if (string.IsNullOrWhiteSpace(domain) || !seenDomains.Add(domain))
+                {
+                    continue;
+                }
+
+                matches.Add(domain);
+                await _logger.LogAsync($"✓ MATCH: {domain}", cancellationToken);
+                if (matches.Count >= 5)
+                {
+                    return matches;
+                }
             }
 
-            await _logger.LogAsync($"✗ Nessun match con query '{query}'", cancellationToken);
-            await Task.Delay(Random.Shared.Next(2000, 4000), cancellationToken);
+            await Task.Delay(Random.Shared.Next(1000, 2500), cancellationToken);
         }
 
-        await _logger.LogAsync("═══════════════════════════════════════", cancellationToken);
-        await _logger.LogAsync($"❌ NESSUN SITO trovato per {comune.Nome}", cancellationToken);
-        await _logger.LogAsync("═══════════════════════════════════════", cancellationToken);
-        return string.Empty;
+        if (matches.Count == 0)
+        {
+            await _logger.LogAsync($"❌ Nessun sito trovato per {comune.Nome}", cancellationToken);
+        }
+
+        return matches;
     }
 
-    private static List<string> BuildQueries(ComuneIstat comune)
+    private static List<string> BuildQueries(ComuneIstat comune, string searchWord)
     {
+        var normalizedSearchWord = string.IsNullOrWhiteSpace(searchWord) ? "Pro Loco" : searchWord.Trim();
         var queries = new List<string>();
-        AddQuery(queries, $"Pro Loco {comune.Nome}");
+
+        AddQuery(queries, $"{normalizedSearchWord} {comune.Nome}");
 
         if (!string.IsNullOrWhiteSpace(comune.SiglaProvincia))
         {
-            AddQuery(queries, $"Pro Loco {comune.Nome} {comune.SiglaProvincia}");
+            AddQuery(queries, $"{normalizedSearchWord} {comune.Nome} {comune.SiglaProvincia}");
         }
 
-        AddQuery(queries, $"Pro Loco {comune.Nome} contatti");
-        AddQuery(queries, $"Pro Loco {comune.Nome} email");
-        AddQuery(queries, $"Pro Loco {comune.Nome} sito");
-        AddQuery(queries, $"Proloco {comune.Nome}");
-        AddQuery(queries, $"{comune.Nome} Pro Loco");
+        AddQuery(queries, $"{normalizedSearchWord} {comune.Nome} contatti");
+        AddQuery(queries, $"{normalizedSearchWord} {comune.Nome} email");
+        AddQuery(queries, $"{normalizedSearchWord} {comune.Nome} sito");
+        AddQuery(queries, $"{comune.Nome} {normalizedSearchWord}");
         return queries;
     }
 
@@ -96,7 +118,7 @@ public sealed class ComuniSearchEngine
         }
     }
 
-    private static bool IsCandidateMatch(string url, ComuneIstat comune)
+    private static bool IsCandidateMatch(string url, ComuneIstat comune, string searchWord)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
         {
@@ -106,25 +128,27 @@ public sealed class ComuniSearchEngine
         var urlValue = $"{uri.Host}{uri.AbsolutePath}".ToLowerInvariant();
         var normalizedUrl = NormalizeForMatch(urlValue);
         var normalizedComune = NormalizeForMatch(comune.Nome);
+        var normalizedSearchWord = NormalizeForMatch(searchWord);
 
         if (normalizedUrl.Contains("facebook") ||
             normalizedUrl.Contains("instagram") ||
             normalizedUrl.Contains("youtube") ||
-            normalizedUrl.Contains("wikipedia"))
+            normalizedUrl.Contains("wikipedia") ||
+            normalizedUrl.Contains("linkedin") ||
+            normalizedUrl.Contains("tiktok"))
         {
             return false;
         }
 
-        var hasProLoco = normalizedUrl.Contains("proloco") ||
-                         normalizedUrl.Contains("prolocopro");
+        var hasSearchWord = !string.IsNullOrWhiteSpace(normalizedSearchWord) && normalizedUrl.Contains(normalizedSearchWord);
         var hasComune = normalizedUrl.Contains(normalizedComune);
 
-        if (hasProLoco && hasComune)
+        if (hasSearchWord && hasComune)
         {
             return true;
         }
 
-        if (hasComune && IsLikelyProLocoUrl(normalizedUrl))
+        if (hasComune && IsLikelyEntityUrl(normalizedUrl))
         {
             return true;
         }
@@ -133,7 +157,7 @@ public sealed class ComuniSearchEngine
                              uri.Host.EndsWith(".com", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static bool IsLikelyProLocoUrl(string url) =>
+    private static bool IsLikelyEntityUrl(string url) =>
         new[] { "turismo", "eventi", "cultura", "territorio", "comune", "visit", "discover", "tourist", "info", "welcome", "unpli" }
             .Any(url.Contains);
 

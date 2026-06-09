@@ -1,8 +1,8 @@
-using runts.Helpers;
-using runts.Models;
+using EasySearch.Helpers;
+using EasySearch.Models;
 using System.Text.RegularExpressions;
 
-namespace runts.Services;
+namespace EasySearch.Services;
 
 public sealed class SearchEngineService : IDisposable
 {

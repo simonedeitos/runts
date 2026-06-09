@@ -1,4 +1,4 @@
-namespace runts.Helpers;
+namespace EasySearch.Helpers;
 
 public static class PecIdentifier
 {
