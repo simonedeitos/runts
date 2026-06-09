@@ -1,17 +1,18 @@
 using Microsoft.Win32;
 
-namespace runts.Helpers;
+namespace EasySearch.Helpers;
 
 /// <summary>
 /// Gestisce impostazioni applicazione in Windows Registry.
-/// Path: HKEY_CURRENT_USER\Software\RuntsContactFinder
+/// Path: HKEY_CURRENT_USER\Software\EasySearch
 /// </summary>
 public static class RegistrySettingsManager
 {
-    private const string RegistryPath = @"Software\RuntsContactFinder";
+    private const string RegistryPath = @"Software\EasySearch";
     private const string BrightDataApiKeyName = "BrightDataApiKey";
     private const string BrightDataHostName = "BrightDataHost";
     private const string BrightDataPortName = "BrightDataPort";
+    private const string ComuniCsvPathName = "ComuniCsvPath";
     private const string DefaultBrightDataHost = "brd.superproxy.io";
     private const int DefaultBrightDataPort = 22225;
 
@@ -47,6 +48,16 @@ public static class RegistrySettingsManager
         using var regKey = Registry.CurrentUser.OpenSubKey(RegistryPath);
         var value = regKey?.GetValue(BrightDataPortName);
         return value is int port ? port : DefaultBrightDataPort;
+    }
+
+    public static void SaveComuniCsvPath(string path)
+    {
+        SaveSetting(ComuniCsvPathName, path);
+    }
+
+    public static string? GetComuniCsvPath()
+    {
+        return GetSetting(ComuniCsvPathName);
     }
 
     public static bool IsBrightDataConfigured()

@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace runts.Helpers;
+namespace EasySearch.Helpers;
 
 public static partial class EmailExtractor
 {

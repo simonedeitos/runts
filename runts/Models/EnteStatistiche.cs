@@ -1,4 +1,4 @@
-namespace runts.Models;
+namespace EasySearch.Models;
 
 public sealed class EnteStatistiche
 {

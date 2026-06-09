@@ -1,7 +1,7 @@
-using runts.Helpers;
-using runts.Services;
+using EasySearch.Helpers;
+using EasySearch.Services;
 
-namespace runts.Forms;
+namespace EasySearch.Forms;
 
 /// <summary>
 /// Form per configurazione impostazioni applicazione.
@@ -22,7 +22,7 @@ public sealed class SettingsForm : Form
 
     private void InitializeComponent()
     {
-        Text = "Impostazioni RUNTS Contact Finder";
+        Text = "Impostazioni EasySearch";
         Size = new Size(680, 380);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;

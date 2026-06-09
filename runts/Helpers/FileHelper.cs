@@ -1,9 +1,9 @@
 using CsvHelper;
 using CsvHelper.Configuration;
-using runts.Models;
+using EasySearch.Models;
 using System.Globalization;
 
-namespace runts.Helpers;
+namespace EasySearch.Helpers;
 
 public static class FileHelper
 {

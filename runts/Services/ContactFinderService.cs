@@ -1,7 +1,7 @@
-using runts.Models;
+using EasySearch.Models;
 using System.Threading.Channels;
 
-namespace runts.Services;
+namespace EasySearch.Services;
 
 /// <summary>
 /// Orchestratore producer/consumer per ricerca sito, scraping contatti e salvataggio continuo su CSV.
@@ -91,7 +91,7 @@ public sealed class ContactFinderService
                 ente.Stato = string.IsNullOrWhiteSpace(ente.SitoWeb) ? StatoEnte.DA_ELABORARE : StatoEnte.SITO_TROVATO;
             }
 
-            var result = await _webScraperService.AnalyzeAsync(ente.SitoWeb, delayMs, headless, cancellationToken);
+            var result = await _webScraperService.AnalyzeAsync(ente.SitoWeb, delayMs, headless, cancellationToken: cancellationToken);
             if (result.emails.Count > 0)
             {
                 ente.Email = string.Join(';', result.emails);
@@ -108,6 +108,7 @@ public sealed class ContactFinderService
                 ente.Telefono = string.Join(';', result.phones);
             }
 
+            ente.Indirizzo = result.indirizzo;
             ente.DataUltimoControllo = DateTime.Now;
             ente.Stato = ente.Stato == StatoEnte.ERRORE ? StatoEnte.ERRORE : StatoEnte.COMPLETATO;
             await _csvManager.UpdateAsync(ente, cancellationToken);

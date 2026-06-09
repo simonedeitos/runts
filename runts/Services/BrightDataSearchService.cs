@@ -1,8 +1,8 @@
 using AngleSharp;
 using System.Net;
-using runts.Helpers;
+using EasySearch.Helpers;
 
-namespace runts.Services;
+namespace EasySearch.Services;
 
 /// <summary>
 /// Servizio ricerca web tramite Bright Data proxy.

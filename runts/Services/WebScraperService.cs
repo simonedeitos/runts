@@ -1,11 +1,13 @@
-using runts.Helpers;
+using EasySearch.Helpers;
+using System.Net;
+using System.Text.RegularExpressions;
 
-namespace runts.Services;
+namespace EasySearch.Services;
 
 /// <summary>
 /// Servizio scraping siti web tramite PuppeteerSharp.
 /// </summary>
-public sealed class WebScraperService
+public sealed partial class WebScraperService
 {
     private readonly LoggerService _logger;
 
@@ -14,19 +16,25 @@ public sealed class WebScraperService
         _logger = logger;
     }
 
-    public async Task<(IReadOnlyCollection<string> emails, IReadOnlyCollection<string> pecs, IReadOnlyCollection<string> phones)> AnalyzeAsync(
+    public async Task<(IReadOnlyCollection<string> emails, IReadOnlyCollection<string> pecs, IReadOnlyCollection<string> phones, string indirizzo)> AnalyzeAsync(
         string baseUrl,
         int delayMs,
         bool headless = true,
+        bool searchEmail = true,
+        bool searchPec = true,
+        bool searchPhone = true,
+        bool searchWebsite = true,
+        bool searchAddress = false,
         CancellationToken cancellationToken = default)
     {
         var allEmails = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var allPecs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var allPhones = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var indirizzo = string.Empty;
 
-        if (string.IsNullOrWhiteSpace(baseUrl))
+        if (string.IsNullOrWhiteSpace(baseUrl) || !searchWebsite)
         {
-            return ([], [], []);
+            return ([], [], [], string.Empty);
         }
 
         try
@@ -43,16 +51,31 @@ public sealed class WebScraperService
                     continue;
                 }
 
-                foreach (var email in emails)
+                if (searchEmail || searchPec)
                 {
-                    allEmails.Add(email);
-                    if (PecIdentifier.IsPec(email))
+                    foreach (var email in emails)
                     {
-                        allPecs.Add(email);
+                        if (searchEmail)
+                        {
+                            allEmails.Add(email);
+                        }
+
+                        if (searchPec && PecIdentifier.IsPec(email))
+                        {
+                            allPecs.Add(email);
+                        }
                     }
                 }
 
-                allPhones.UnionWith(PhoneExtractor.Extract(html));
+                if (searchPhone)
+                {
+                    allPhones.UnionWith(PhoneExtractor.Extract(html));
+                }
+
+                if (searchAddress && string.IsNullOrWhiteSpace(indirizzo))
+                {
+                    indirizzo = ExtractAddress(html);
+                }
 
                 if (delayMs > 0)
                 {
@@ -61,7 +84,7 @@ public sealed class WebScraperService
             }
 
             await _logger.LogAsync(
-                $"Scansione completata: {allEmails.Count} email | {allPecs.Count} PEC | {allPhones.Count} telefoni",
+                $"Scansione completata: {allEmails.Count} email | {allPecs.Count} PEC | {allPhones.Count} telefoni | indirizzo {(string.IsNullOrWhiteSpace(indirizzo) ? "n/d" : "trovato")}",
                 cancellationToken);
         }
         catch (OperationCanceledException)
@@ -73,7 +96,7 @@ public sealed class WebScraperService
             await _logger.LogAsync($"Errore scansione {baseUrl}: {ex.Message}", cancellationToken);
         }
 
-        return (allEmails.ToArray(), allPecs.ToArray(), allPhones.ToArray());
+        return (allEmails.ToArray(), allPecs.ToArray(), allPhones.ToArray(), indirizzo);
     }
 
     private static IEnumerable<string> GetPagesToScan(string baseUrl)
@@ -90,4 +113,25 @@ public sealed class WebScraperService
             yield return new Uri(new Uri(root), path).ToString();
         }
     }
+
+    private static string ExtractAddress(string html)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            return string.Empty;
+        }
+
+        var text = WebUtility.HtmlDecode(Regex.Replace(html, "<[^>]+>", " "));
+        text = Regex.Replace(text, "\\s+", " ").Trim();
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        var match = ItalianAddressRegex().Match(text);
+        return match.Success ? match.Value.Trim(' ', ',', ';', '.', '-') : string.Empty;
+    }
+
+    [GeneratedRegex(@"\b(?:via|viale|piazza|corso|largo|vicolo|contrada|strada|piazzale|località|loc\.)\s+[A-Za-zÀ-ÿ0-9'`\-\.\s]{3,80}?\s+(?:n\.?\s*)?\d+[A-Za-z]?\s*(?:,|\-|–)?\s*(?:\d{5}\s+)?[A-Za-zÀ-ÿ'`\-\.\s]{2,60}", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+    private static partial Regex ItalianAddressRegex();
 }

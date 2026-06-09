@@ -1,51 +1,30 @@
 using ClosedXML.Excel;
 using CsvHelper;
 using CsvHelper.Configuration;
-using runts.Helpers;
-using runts.Models;
+using EasySearch.Models;
 using System.Globalization;
 
-namespace runts.Services;
+namespace EasySearch.Services;
 
 public sealed class ExportService
 {
-    private readonly CsvManager _csvManager;
-
-    public ExportService(CsvManager csvManager)
+    public async Task ExportCsvAsync(IEnumerable<Ente> enti, string path, CancellationToken cancellationToken = default)
     {
-        _csvManager = csvManager;
-    }
-
-    public async Task<string> ExportRegionCsvAsync(string regione, CancellationToken cancellationToken = default)
-    {
-        var enti = await FilterByRegionAsync(regione, cancellationToken);
-        var path = Path.Combine(FileHelper.DataRoot, "Export", $"{regione}.csv");
-
+        var rows = enti.ToList();
         await using var stream = File.Open(path, FileMode.Create, FileAccess.Write, FileShare.None);
         await using var writer = new StreamWriter(stream);
         await using var csv = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture) { Delimiter = ";" });
-        await csv.WriteRecordsAsync(enti, cancellationToken);
-        return path;
+        await csv.WriteRecordsAsync(rows, cancellationToken);
     }
 
-    public async Task<string> ExportRegionExcelAsync(string regione, CancellationToken cancellationToken = default)
+    public Task ExportExcelAsync(IEnumerable<Ente> enti, string path, CancellationToken cancellationToken = default)
     {
-        var enti = await FilterByRegionAsync(regione, cancellationToken);
-        var path = Path.Combine(FileHelper.DataRoot, "Export", $"{regione}.xlsx");
-
+        cancellationToken.ThrowIfCancellationRequested();
         using var wb = new XLWorkbook();
-        var ws = wb.AddWorksheet(regione);
-        ws.Cell(1, 1).InsertTable(enti);
+        var ws = wb.AddWorksheet("EasySearch");
+        ws.Cell(1, 1).InsertTable(enti.ToList());
         ws.Columns().AdjustToContents();
         wb.SaveAs(path);
-
-        await Task.CompletedTask;
-        return path;
-    }
-
-    private async Task<List<Ente>> FilterByRegionAsync(string regione, CancellationToken cancellationToken)
-    {
-        var all = await _csvManager.LoadAsync(cancellationToken);
-        return all.Where(x => x.Regione.Equals(regione, StringComparison.OrdinalIgnoreCase)).ToList();
+        return Task.CompletedTask;
     }
 }

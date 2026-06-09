@@ -1,7 +1,7 @@
-using runts.Helpers;
+using EasySearch.Helpers;
 using System.Text;
 
-namespace runts.Services;
+namespace EasySearch.Services;
 
 public sealed class LoggerService
 {
