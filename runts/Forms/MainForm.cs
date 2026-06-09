@@ -12,6 +12,7 @@ public partial class MainForm : Form
     private readonly LoggerService _logger;
     private readonly IstatComuniImporter _istatComuniImporter;
     private readonly WebScraperService _webScraperService;
+    private readonly BindingList<ComuneImportato> _comuniImportati = [];
     private readonly BindingList<Ente> _rows = [];
     private readonly Queue<string> _statusLines = new();
     private readonly ManualResetEventSlim _pauseEvent = new(true);
@@ -32,7 +33,11 @@ public partial class MainForm : Form
 
         InitializeComponent();
 
-        gridEnti.DataSource = _rows;
+        gridComuniImportati.DataSource = _comuniImportati;
+        gridRisultati.DataSource = _rows;
+        gridComuniImportati.CellFormatting += GridComuniImportati_CellFormatting;
+        gridComuniImportati.DataBindingComplete += (_, _) => ConfigureGridColumns();
+        gridRisultati.DataBindingComplete += (_, _) => ConfigureGridColumns();
         btnBrowseCsvComuni.Click += BtnBrowseCsvComuni_Click;
         btnImportaComuni.Click += async (_, _) => await ImportaComuniAsync();
         btnAvvia.Click += async (_, _) => await AvviaRicercaAsync();
@@ -66,6 +71,8 @@ public partial class MainForm : Form
             {
                 _rows.Add(row);
             }
+
+            ConfigureGridColumns();
 
             UpdateStats(new EnteStatistiche
             {
@@ -228,6 +235,8 @@ public partial class MainForm : Form
     {
         try
         {
+            UpdateComuneStato(comune, StatoElaborazione.IN_ELABORAZIONE);
+
             var urls = options.MultiResult
                 ? await comuniSearchEngine.FindMultipleForComuneAsync(comune, searchWord, cancellationToken)
                 : [await comuniSearchEngine.FindProLocoForComuneAsync(comune, searchWord, cancellationToken)];
@@ -238,6 +247,7 @@ public partial class MainForm : Form
                 var emptyRow = CreateEnteFromComune(comune, searchWord);
                 emptyRow.Stato = StatoEnte.DA_ELABORARE;
                 emptyRow.DataUltimoControllo = DateTime.Now;
+                UpdateComuneStato(comune, StatoElaborazione.COMPLETATO);
                 return new ComuneProcessResult([emptyRow], 0, 0, 0, false, $"{comune.Nome}: nessun sito trovato");
             }
 
@@ -290,14 +300,17 @@ public partial class MainForm : Form
                 rows.Add(ente);
             }
 
+            UpdateComuneStato(comune, StatoElaborazione.COMPLETATO);
             return new ComuneProcessResult(rows, siteCount, emailCount, pecCount, false, $"{comune.Nome}: {rows.Count} risultato/i");
         }
         catch (OperationCanceledException)
         {
+            UpdateComuneStato(comune, StatoElaborazione.DA_ELABORARE);
             throw;
         }
         catch (Exception ex)
         {
+            UpdateComuneStato(comune, StatoElaborazione.ERRORE);
             await _logger.LogAsync($"Errore comune {comune.Nome}: {ex.Message}", cancellationToken);
             var errorRow = CreateEnteFromComune(comune, searchWord);
             errorRow.Stato = StatoEnte.ERRORE;
@@ -434,6 +447,7 @@ public partial class MainForm : Form
 
             UpdateStatus("Aggiornamento griglia...", 90);
             await RefreshGridAsync(cancellationToken);
+            PopulateComuniImportati(enti);
 
             RegistrySettingsManager.SaveComuniCsvPath(csvPath);
             lblFonte.Text = $"Fonte dati: CSV ISTAT ({Path.GetFileName(csvPath)})";
@@ -618,6 +632,110 @@ public partial class MainForm : Form
         lblStatusComuni.Text = string.Join(Environment.NewLine, _statusLines);
     }
 
+    private void ConfigureGridColumns()
+    {
+        if (gridComuniImportati.Columns.Count > 0)
+        {
+            if (gridComuniImportati.Columns.Contains("Regione"))
+            {
+                gridComuniImportati.Columns["Regione"].Width = 120;
+                gridComuniImportati.Columns["Regione"].HeaderText = "Regione";
+            }
+
+            if (gridComuniImportati.Columns.Contains("Provincia"))
+            {
+                gridComuniImportati.Columns["Provincia"].Width = 60;
+                gridComuniImportati.Columns["Provincia"].HeaderText = "Prov";
+            }
+
+            if (gridComuniImportati.Columns.Contains("Comune"))
+            {
+                gridComuniImportati.Columns["Comune"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+                gridComuniImportati.Columns["Comune"].HeaderText = "Comune";
+            }
+
+            if (gridComuniImportati.Columns.Contains("Stato"))
+            {
+                gridComuniImportati.Columns["Stato"].Visible = false;
+            }
+
+            if (gridComuniImportati.Columns.Contains("Chiave"))
+            {
+                gridComuniImportati.Columns["Chiave"].Visible = false;
+            }
+        }
+
+        if (gridRisultati.Columns.Count > 0)
+        {
+            if (gridRisultati.Columns.Contains("Provincia"))
+            {
+                gridRisultati.Columns["Provincia"].Width = 60;
+            }
+
+            if (gridRisultati.Columns.Contains("Comune"))
+            {
+                gridRisultati.Columns["Comune"].Width = 150;
+            }
+
+            if (gridRisultati.Columns.Contains("Categoria"))
+            {
+                gridRisultati.Columns["Categoria"].Width = 100;
+            }
+
+            if (gridRisultati.Columns.Contains("SitoWeb"))
+            {
+                gridRisultati.Columns["SitoWeb"].Width = 200;
+                gridRisultati.Columns["SitoWeb"].HeaderText = "Sito web";
+            }
+
+            if (gridRisultati.Columns.Contains("Email"))
+            {
+                gridRisultati.Columns["Email"].Width = 180;
+            }
+
+            if (gridRisultati.Columns.Contains("PEC"))
+            {
+                gridRisultati.Columns["PEC"].Width = 180;
+            }
+
+            if (gridRisultati.Columns.Contains("Telefono"))
+            {
+                gridRisultati.Columns["Telefono"].Width = 120;
+            }
+
+            if (gridRisultati.Columns.Contains("Indirizzo"))
+            {
+                gridRisultati.Columns["Indirizzo"].Width = 200;
+            }
+
+            if (gridRisultati.Columns.Contains("DataUltimoControllo"))
+            {
+                gridRisultati.Columns["DataUltimoControllo"].Width = 130;
+                gridRisultati.Columns["DataUltimoControllo"].HeaderText = "Data ultima modifica";
+            }
+
+            if (gridRisultati.Columns.Contains("Regione"))
+            {
+                gridRisultati.Columns["Regione"].Visible = false;
+            }
+
+            if (gridRisultati.Columns.Contains("CodiceFiscale"))
+            {
+                gridRisultati.Columns["CodiceFiscale"].Visible = false;
+            }
+
+            if (gridRisultati.Columns.Contains("Denominazione"))
+            {
+                gridRisultati.Columns["Denominazione"].Visible = false;
+            }
+
+            if (gridRisultati.Columns.Contains("Stato"))
+            {
+                gridRisultati.Columns["Stato"].Visible = false;
+            }
+        }
+    }
+
     private void UpdateStats(EnteStatistiche stats)
     {
         progressBar.Maximum = Math.Max(stats.TotaleEnti, 1);
@@ -676,6 +794,89 @@ public partial class MainForm : Form
         };
     }
 
+    private void PopulateComuniImportati(IEnumerable<Ente> enti)
+    {
+        SafeUiInvoke(() =>
+        {
+            _comuniImportati.Clear();
+            foreach (var ente in enti
+                .OrderBy(x => x.Regione)
+                .ThenBy(x => x.Provincia)
+                .ThenBy(x => x.Comune)
+                .GroupBy(x => $"{x.Regione}|{x.Provincia}|{x.Comune}", StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First()))
+            {
+                _comuniImportati.Add(new ComuneImportato
+                {
+                    Regione = ente.Regione,
+                    Provincia = ente.Provincia,
+                    Comune = ente.Comune,
+                    Stato = StatoElaborazione.DA_ELABORARE
+                });
+            }
+
+            ConfigureGridColumns();
+            gridComuniImportati.Refresh();
+        });
+    }
+
+    private void UpdateComuneStato(ComuneIstat comune, StatoElaborazione nuovoStato)
+    {
+        SafeUiInvoke(() =>
+        {
+            var chiave = $"{comune.Regione}|{comune.SiglaProvincia}|{comune.Nome}";
+            var index = _comuniImportati.ToList().FindIndex(x => x.Chiave.Equals(chiave, StringComparison.OrdinalIgnoreCase));
+            if (index < 0)
+            {
+                return;
+            }
+
+            _comuniImportati[index].Stato = nuovoStato;
+            if (index < gridComuniImportati.Rows.Count)
+            {
+                gridComuniImportati.InvalidateRow(index);
+            }
+        });
+    }
+
+    private void GridComuniImportati_CellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.RowIndex >= _comuniImportati.Count)
+        {
+            return;
+        }
+
+        var row = gridComuniImportati.Rows[e.RowIndex];
+        var comune = _comuniImportati[e.RowIndex];
+        switch (comune.Stato)
+        {
+            case StatoElaborazione.DA_ELABORARE:
+                row.DefaultCellStyle.BackColor = Color.White;
+                row.DefaultCellStyle.ForeColor = Color.Black;
+                row.DefaultCellStyle.SelectionBackColor = Color.White;
+                row.DefaultCellStyle.SelectionForeColor = Color.Black;
+                break;
+            case StatoElaborazione.IN_ELABORAZIONE:
+                row.DefaultCellStyle.BackColor = Color.Yellow;
+                row.DefaultCellStyle.ForeColor = Color.Black;
+                row.DefaultCellStyle.SelectionBackColor = Color.Yellow;
+                row.DefaultCellStyle.SelectionForeColor = Color.Black;
+                break;
+            case StatoElaborazione.COMPLETATO:
+                row.DefaultCellStyle.BackColor = Color.LightGreen;
+                row.DefaultCellStyle.ForeColor = Color.Black;
+                row.DefaultCellStyle.SelectionBackColor = Color.LightGreen;
+                row.DefaultCellStyle.SelectionForeColor = Color.Black;
+                break;
+            case StatoElaborazione.ERRORE:
+                row.DefaultCellStyle.BackColor = Color.LightCoral;
+                row.DefaultCellStyle.ForeColor = Color.White;
+                row.DefaultCellStyle.SelectionBackColor = Color.LightCoral;
+                row.DefaultCellStyle.SelectionForeColor = Color.White;
+                break;
+        }
+    }
+
     private sealed class ComuneIstatComparer : IEqualityComparer<ComuneIstat>
     {
         public bool Equals(ComuneIstat? x, ComuneIstat? y)
@@ -727,4 +928,22 @@ public partial class MainForm : Form
         int PecCount,
         bool HasError,
         string StatusMessage);
+
+    private sealed class ComuneImportato
+    {
+        public string Regione { get; set; } = string.Empty;
+        public string Provincia { get; set; } = string.Empty;
+        public string Comune { get; set; } = string.Empty;
+        public StatoElaborazione Stato { get; set; } = StatoElaborazione.DA_ELABORARE;
+
+        public string Chiave => $"{Regione}|{Provincia}|{Comune}";
+    }
+
+    private enum StatoElaborazione
+    {
+        DA_ELABORARE,
+        IN_ELABORAZIONE,
+        COMPLETATO,
+        ERRORE
+    }
 }

@@ -38,8 +38,11 @@ partial class MainForm
     private Label lblFonte;
     private Label lblStatusComuni;
     private ProgressBar progressBar;
-    private DataGridView gridEnti;
+    private SplitContainer splitMain;
+    private GroupBox groupComuniImportati;
+    private DataGridView gridComuniImportati;
     private GroupBox groupRisultati;
+    private DataGridView gridRisultati;
     private TableLayoutPanel tableRoot;
 
     protected override void Dispose(bool disposing)
@@ -91,11 +94,19 @@ partial class MainForm
         lblFonte = new Label();
         lblStatusComuni = new Label();
         progressBar = new ProgressBar();
+        splitMain = new SplitContainer();
+        groupComuniImportati = new GroupBox();
+        gridComuniImportati = new DataGridView();
         groupRisultati = new GroupBox();
-        gridEnti = new DataGridView();
+        gridRisultati = new DataGridView();
         ((System.ComponentModel.ISupportInitialize)numThread).BeginInit();
         ((System.ComponentModel.ISupportInitialize)numDelay).BeginInit();
-        ((System.ComponentModel.ISupportInitialize)gridEnti).BeginInit();
+        ((System.ComponentModel.ISupportInitialize)splitMain).BeginInit();
+        splitMain.Panel1.SuspendLayout();
+        splitMain.Panel2.SuspendLayout();
+        splitMain.SuspendLayout();
+        ((System.ComponentModel.ISupportInitialize)gridComuniImportati).BeginInit();
+        ((System.ComponentModel.ISupportInitialize)gridRisultati).BeginInit();
         SuspendLayout();
 
         AutoScaleDimensions = new SizeF(7F, 15F);
@@ -373,29 +384,56 @@ partial class MainForm
         lblStatusComuni.ForeColor = Color.DarkSlateBlue;
         lblStatusComuni.Text = "Pronto";
 
+        splitMain.Dock = DockStyle.Fill;
+        splitMain.Orientation = Orientation.Vertical;
+        splitMain.SplitterDistance = 400;
+        splitMain.SplitterWidth = 8;
+        splitMain.FixedPanel = FixedPanel.Panel1;
+        splitMain.IsSplitterFixed = false;
+        splitMain.BorderStyle = BorderStyle.FixedSingle;
+
+        groupComuniImportati.Dock = DockStyle.Fill;
+        groupComuniImportati.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+        groupComuniImportati.Text = "Comuni importati";
+        groupComuniImportati.Padding = new Padding(8);
+
+        gridComuniImportati.AllowUserToAddRows = false;
+        gridComuniImportati.AllowUserToDeleteRows = false;
+        gridComuniImportati.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        gridComuniImportati.BackgroundColor = Color.White;
+        gridComuniImportati.BorderStyle = BorderStyle.None;
+        gridComuniImportati.Dock = DockStyle.Fill;
+        gridComuniImportati.MultiSelect = false;
+        gridComuniImportati.ReadOnly = true;
+        gridComuniImportati.RowHeadersVisible = false;
+        gridComuniImportati.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        groupComuniImportati.Controls.Add(gridComuniImportati);
+        splitMain.Panel1.Controls.Add(groupComuniImportati);
+
         groupRisultati.Dock = DockStyle.Fill;
         groupRisultati.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
-        groupRisultati.Text = "Risultati";
-        groupRisultati.Padding = new Padding(12);
+        groupRisultati.Text = "Risultati ricerca";
+        groupRisultati.Padding = new Padding(8);
 
-        gridEnti.AllowUserToAddRows = false;
-        gridEnti.AllowUserToDeleteRows = false;
-        gridEnti.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-        gridEnti.BackgroundColor = Color.White;
-        gridEnti.BorderStyle = BorderStyle.None;
-        gridEnti.Dock = DockStyle.Fill;
-        gridEnti.MultiSelect = false;
-        gridEnti.ReadOnly = true;
-        gridEnti.RowHeadersVisible = false;
-        gridEnti.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        groupRisultati.Controls.Add(gridEnti);
+        gridRisultati.AllowUserToAddRows = false;
+        gridRisultati.AllowUserToDeleteRows = false;
+        gridRisultati.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        gridRisultati.BackgroundColor = Color.White;
+        gridRisultati.BorderStyle = BorderStyle.None;
+        gridRisultati.Dock = DockStyle.Fill;
+        gridRisultati.MultiSelect = false;
+        gridRisultati.ReadOnly = true;
+        gridRisultati.RowHeadersVisible = false;
+        gridRisultati.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        groupRisultati.Controls.Add(gridRisultati);
+        splitMain.Panel2.Controls.Add(groupRisultati);
 
         tableRoot.Controls.Add(groupConfigurazione, 0, 0);
         tableRoot.Controls.Add(statsPanel, 0, 1);
         tableRoot.Controls.Add(progressBar, 0, 2);
         tableRoot.Controls.Add(lblFonte, 0, 3);
         tableRoot.Controls.Add(lblStatusComuni, 0, 4);
-        tableRoot.Controls.Add(groupRisultati, 0, 5);
+        tableRoot.Controls.Add(splitMain, 0, 5);
 
         Controls.Add(tableRoot);
         Controls.Add(menuStripMain);
@@ -403,7 +441,12 @@ partial class MainForm
 
         ((System.ComponentModel.ISupportInitialize)numThread).EndInit();
         ((System.ComponentModel.ISupportInitialize)numDelay).EndInit();
-        ((System.ComponentModel.ISupportInitialize)gridEnti).EndInit();
+        splitMain.Panel1.ResumeLayout(false);
+        splitMain.Panel2.ResumeLayout(false);
+        ((System.ComponentModel.ISupportInitialize)splitMain).EndInit();
+        splitMain.ResumeLayout(false);
+        ((System.ComponentModel.ISupportInitialize)gridComuniImportati).EndInit();
+        ((System.ComponentModel.ISupportInitialize)gridRisultati).EndInit();
         ResumeLayout(false);
         PerformLayout();
     }
