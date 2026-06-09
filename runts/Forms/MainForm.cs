@@ -277,7 +277,7 @@ public partial class MainForm : Form
         using var dialog = new SaveFileDialog
         {
             Filter = "CSV files (*.csv)|*.csv",
-            FileName = $"easysearch_{DateTime.Now:yyyyMMdd_HHmmss}.csv"
+            FileName = BuildDefaultExportCsvFileName()
         };
 
         if (dialog.ShowDialog(this) != DialogResult.OK)
@@ -358,6 +358,36 @@ public partial class MainForm : Form
         (int)numDelay.Value);
 
     private string GetSearchWord() => string.IsNullOrWhiteSpace(txtParolaCerca.Text) ? "Pro Loco" : txtParolaCerca.Text.Trim();
+
+    private string BuildDefaultExportCsvFileName()
+    {
+        var nomeRicerca = NormalizeFileNamePart(GetSearchWord());
+        var nomeComune = _rows
+            .Select(x => x.Comune)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(NormalizeFileNamePart)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList() switch
+            {
+                { Count: 1 } comuni => comuni[0],
+                _ => "tutti_comuni"
+            };
+
+        return $"{nomeRicerca}_{nomeComune}_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+    }
+
+    private static string NormalizeFileNamePart(string value)
+    {
+        var invalidChars = Path.GetInvalidFileNameChars();
+        var normalized = new string(value
+            .Trim()
+            .ToLowerInvariant()
+            .Select(ch => invalidChars.Contains(ch) ? '_' : ch)
+            .ToArray());
+
+        normalized = string.Join('_', normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        return string.IsNullOrWhiteSpace(normalized) ? "ricerca" : normalized;
+    }
 
     private string GetCsvComuniPath()
     {
