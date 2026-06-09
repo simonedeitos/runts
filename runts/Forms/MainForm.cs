@@ -349,6 +349,9 @@ public partial class MainForm : Form
 
     private async Task ImportaComuniAsync()
     {
+        using var importCts = new CancellationTokenSource();
+        var cancellationToken = importCts.Token;
+
         try
         {
             var csvPath = GetCsvComuniPath();
@@ -356,37 +359,79 @@ public partial class MainForm : Form
             var selectedRegione = GetSelectedRegione();
             var isAllRegions = selectedRegione.Equals("Tutte le regioni", StringComparison.OrdinalIgnoreCase);
 
-            btnImportaComuni.Enabled = false;
-            btnBrowseCsvComuni.Enabled = false;
-            btnAvvia.Enabled = false;
-            txtCsvComuni.Enabled = false;
-            txtParolaCerca.Enabled = false;
-            cmbRegione.Enabled = false;
-            var comuni = await _istatComuniImporter.LoadComuniAsync(csvPath);
-            if (!isAllRegions)
+            SetImportControls(false);
+            SafeUiInvoke(() =>
             {
-                comuni = _istatComuniImporter.FilterByRegione(comuni, selectedRegione);
-            }
+                progressBar.Visible = true;
+                progressBar.Minimum = 0;
+                progressBar.Maximum = 100;
+                progressBar.Value = 0;
+            });
+            UpdateStatus("Caricamento CSV comuni ISTAT...", 10, resetQueue: true);
 
-            var enti = comuni.Select(comune => CreateEnteFromComune(comune, searchWord)).ToList();
-            await _csvManager.ReplaceAllAsync(enti);
-            await RefreshGridAsync();
+            var (enti, regioneFiltrata) = await Task.Run(async () =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var comuniCaricati = await _istatComuniImporter.LoadComuniAsync(csvPath, cancellationToken);
+                SafeUiInvoke(() => UpdateStatus($"Caricati {comuniCaricati.Count} comuni dal CSV", 30));
+
+                var comuniFiltrati = isAllRegions
+                    ? comuniCaricati
+                    : await _istatComuniImporter.FilterByRegioneAsync(comuniCaricati, selectedRegione, cancellationToken);
+                SafeUiInvoke(() => UpdateStatus($"Filtrati {comuniFiltrati.Count} comuni per {selectedRegione}", 50));
+
+                var entiCreati = comuniFiltrati
+                    .Select(comune => CreateEnteFromComune(comune, searchWord))
+                    .ToList();
+                SafeUiInvoke(() => UpdateStatus($"Creati {entiCreati.Count} enti", 70));
+
+                return (entiCreati, selectedRegione);
+            }, cancellationToken);
+
+            UpdateStatus("Salvataggio dati in database...", 80);
+            await _csvManager.ReplaceAllAsync(enti, cancellationToken);
+
+            UpdateStatus("Aggiornamento griglia...", 90);
+            await RefreshGridAsync(cancellationToken);
 
             RegistrySettingsManager.SaveComuniCsvPath(csvPath);
             lblFonte.Text = $"Fonte dati: CSV ISTAT ({Path.GetFileName(csvPath)})";
+            UpdateStatus($"✓ Importati {enti.Count} comuni per {regioneFiltrata}", 100);
             MessageBox.Show(
-                $"Importati {enti.Count} comuni per {selectedRegione}",
+                $"✓ Importazione completata{Environment.NewLine}{Environment.NewLine}" +
+                $"Regione: {regioneFiltrata}{Environment.NewLine}" +
+                $"Comuni importati: {enti.Count}{Environment.NewLine}{Environment.NewLine}" +
+                "Ora puoi avviare la ricerca cliccando 'Avvia Ricerca'.",
                 Text,
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
         }
+        catch (FileNotFoundException ex)
+        {
+            MessageBox.Show(
+                $"File CSV ISTAT non trovato:{Environment.NewLine}{Environment.NewLine}{ex.Message}{Environment.NewLine}{Environment.NewLine}" +
+                "Scarica il file da:" + Environment.NewLine +
+                "https://www.istat.it/storage/codici-unita-amministrative/Elenco-comuni-italiani.csv",
+                "File Mancante",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+        catch (OperationCanceledException)
+        {
+            UpdateStatus("Importazione annullata", progressBar.Value);
+            MessageBox.Show("Importazione annullata.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
         catch (Exception ex)
         {
-            MessageBox.Show($"Errore durante l'importazione dei comuni:\n\n{ex.Message}", Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(
+                $"Errore durante l'importazione:{Environment.NewLine}{Environment.NewLine}{ex.Message}",
+                "Errore",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
         }
         finally
         {
-            SetProcessingControls(false);
+            SetImportControls(true);
         }
     }
 
@@ -449,9 +494,19 @@ public partial class MainForm : Form
         return csvPath;
     }
 
+    private void SetImportControls(bool enabled)
+    {
+        btnImportaComuni.Enabled = enabled;
+        btnBrowseCsvComuni.Enabled = enabled;
+        txtCsvComuni.Enabled = enabled;
+        cmbRegione.Enabled = enabled;
+        txtParolaCerca.Enabled = enabled;
+        btnAvvia.Enabled = enabled && _rows.Count > 0;
+    }
+
     private void SetProcessingControls(bool isProcessing)
     {
-        btnAvvia.Enabled = !isProcessing;
+        btnAvvia.Enabled = !isProcessing && _rows.Count > 0;
         btnImportaComuni.Enabled = !isProcessing;
         btnBrowseCsvComuni.Enabled = !isProcessing;
         btnExportCsv.Enabled = !isProcessing;

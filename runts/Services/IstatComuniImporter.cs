@@ -80,14 +80,26 @@ public sealed class IstatComuniImporter
 
     public List<ComuneIstat> FilterByRegione(IEnumerable<ComuneIstat> comuni, string regione)
     {
-        var filtered = comuni
-            .Where(c => NormalizeRegion(c.Regione).Equals(NormalizeRegion(regione), StringComparison.OrdinalIgnoreCase))
-            .OrderBy(c => c.Provincia)
-            .ThenBy(c => c.Nome)
-            .ToList();
+        return FilterByRegioneAsync(comuni, regione).GetAwaiter().GetResult();
+    }
 
-        _logger.LogAsync($"✓ Filtrati {filtered.Count} comuni per regione: {regione}").GetAwaiter().GetResult();
-        return filtered;
+    public async Task<List<ComuneIstat>> FilterByRegioneAsync(
+        IEnumerable<ComuneIstat> comuni,
+        string regione,
+        CancellationToken cancellationToken = default)
+    {
+        return await Task.Run(async () =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var filtered = comuni
+                .Where(c => NormalizeRegion(c.Regione).Equals(NormalizeRegion(regione), StringComparison.OrdinalIgnoreCase))
+                .OrderBy(c => c.Provincia)
+                .ThenBy(c => c.Nome)
+                .ToList();
+
+            await _logger.LogAsync($"✓ Filtrati {filtered.Count} comuni per regione: {regione}", cancellationToken);
+            return filtered;
+        }, cancellationToken);
     }
 
     private static ComuneIstat? ParseRecord(string[] parts)
