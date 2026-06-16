@@ -98,11 +98,11 @@ public sealed class PuppeteerHelper : IDisposable, IAsyncDisposable
     /// Cerca con strategia ibrida: Google → DuckDuckGo → Bing.
     /// Fallback automatico se il motore restituisce 0 risultati.
     /// </summary>
-    public async Task<List<string>> SearchAsync(string query, CancellationToken ct = default)
+    public async Task<List<string>> SearchAsync(string query, CancellationToken ct = default, bool includeMapsLinks = false)
     {
         await InitializeAsync(ct);
 
-        var googleResults = await SearchGoogleAsync(query, ct);
+        var googleResults = await SearchGoogleAsync(query, ct, includeMapsLinks);
         if (googleResults.Count > 0)
         {
             return googleResults;
@@ -131,7 +131,7 @@ public sealed class PuppeteerHelper : IDisposable, IAsyncDisposable
     public Task<(HashSet<string> emails, string html)> ExtractPageContentAsync(string url, CancellationToken ct = default)
         => ExtractPageDataAsync(url, ct);
 
-    private async Task<List<string>> SearchGoogleAsync(string query, CancellationToken ct)
+    private async Task<List<string>> SearchGoogleAsync(string query, CancellationToken ct, bool includeMapsLinks = false)
     {
         await _logger.LogAsync($"🔍 Google: '{query}'", ct);
         await using var page = await CreatePageAsync(ct);
@@ -168,8 +168,13 @@ public sealed class PuppeteerHelper : IDisposable, IAsyncDisposable
             await page.EvaluateExpressionAsync("window.scrollTo({ top: document.body.scrollHeight * 0.35, behavior: 'smooth' })");
             await DelayAsync(1200, ct);
 
+            // Build the Google-domain filter: when includeMapsLinks is true, allow maps.google.com paths
+            var googleFilter = includeMapsLinks
+                ? "href.includes('youtube.')"
+                : "href.includes('google.') || href.includes('youtube.')";
+
             var urls = await page.EvaluateFunctionAsync<string[]>(
-                @"() => {
+                $@"() => {{
                     const results = [];
                     const selectors = [
                         'div.g a[href]',
@@ -177,23 +182,23 @@ public sealed class PuppeteerHelper : IDisposable, IAsyncDisposable
                         'a[jsname][data-ved]'
                     ];
 
-                    for (const selector of selectors) {
-                        for (const link of document.querySelectorAll(selector)) {
+                    for (const selector of selectors) {{
+                        for (const link of document.querySelectorAll(selector)) {{
                             const href = link.href;
-                            if (!href || !href.startsWith('http')) {
+                            if (!href || !href.startsWith('http')) {{
                                 continue;
-                            }
+                            }}
 
-                            if (href.includes('google.') || href.includes('youtube.')) {
+                            if ({googleFilter}) {{
                                 continue;
-                            }
+                            }}
 
                             results.push(href);
-                        }
-                    }
+                        }}
+                    }}
 
                     return [...new Set(results)].slice(0, 10);
-                }");
+                }}");
 
             var filtered = NormalizeUrls(urls);
             await _logger.LogAsync($"✓ Google: {filtered.Count} risultati", ct);

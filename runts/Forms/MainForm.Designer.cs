@@ -23,6 +23,7 @@ partial class MainForm
     private NumericUpDown numThread;
     private NumericUpDown numDelay;
     private CheckBox chkShowChrome;
+    private CheckBox chkGoogleMaps;
     private Button btnAvvia;
     private Button btnPausa;
     private Button btnRiprendi;
@@ -79,6 +80,7 @@ partial class MainForm
         numThread = new NumericUpDown();
         numDelay = new NumericUpDown();
         chkShowChrome = new CheckBox();
+        chkGoogleMaps = new CheckBox();
         btnAvvia = new Button();
         btnPausa = new Button();
         btnRiprendi = new Button();
@@ -292,7 +294,11 @@ partial class MainForm
         chkIndirizzo.Text = "Indirizzo";
         chkIndirizzo.AutoSize = true;
         chkIndirizzo.Margin = new Padding(0, 0, 16, 6);
-        datiPanel.Controls.AddRange(new Control[] { chkEmail, chkPec, chkTelefono, chkSitoWeb, chkIndirizzo });
+        chkGoogleMaps.Text = "Google Maps";
+        chkGoogleMaps.Checked = false;
+        chkGoogleMaps.AutoSize = true;
+        chkGoogleMaps.Margin = new Padding(0, 0, 16, 6);
+        datiPanel.Controls.AddRange(new Control[] { chkEmail, chkPec, chkTelefono, chkSitoWeb, chkIndirizzo, chkGoogleMaps });
         groupDati.Controls.Add(datiPanel);
 
         panelsLayout.Controls.Add(groupModalita, 0, 0);

@@ -1,6 +1,7 @@
 using EasySearch.Helpers;
 using EasySearch.Models;
 using EasySearch.Services;
+using System.Collections.Concurrent;
 using System.ComponentModel;
 
 namespace EasySearch.Forms;
@@ -90,7 +91,7 @@ public partial class MainForm : Form
     {
         try
         {
-            if (_rows.Count == 0)
+            if (_comuniImportati.Count == 0)
             {
                 MessageBox.Show(
                     "Nessun comune da elaborare.\n\nClicca prima su 'Importa Comuni' per caricare i comuni dalla regione desiderata.",
@@ -107,13 +108,13 @@ public partial class MainForm : Form
                 return;
             }
 
-            var comuni = _rows
-                .Select(ente => new ComuneIstat
+            var comuni = _comuniImportati
+                .Select(ci => new ComuneIstat
                 {
-                    Nome = ente.Comune,
-                    Regione = ente.Regione,
-                    Provincia = ente.Provincia,
-                    SiglaProvincia = ente.Provincia
+                    Nome = ci.Comune,
+                    Regione = ci.Regione,
+                    Provincia = ci.Provincia,
+                    SiglaProvincia = ci.Provincia
                 })
                 .Distinct(new ComuneIstatComparer())
                 .ToList();
@@ -132,6 +133,8 @@ public partial class MainForm : Form
             _cts = new CancellationTokenSource();
             _pauseEvent.Set();
 
+            SafeUiInvoke(() => _rows.Clear());
+
             SetProcessingControls(true);
             ResetProgress(outputFile, comuni.Count);
 
@@ -144,6 +147,7 @@ public partial class MainForm : Form
             var workerCount = (int)numThread.Value;
             var nextIndex = -1;
             var statsLock = new object();
+            var seenEmails = new ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
             var options = GetSearchOptions();
 
             UpdateStatus($"Avvio ricerca per {comuni.Count} comuni", 0, resetQueue: true);
@@ -161,7 +165,7 @@ public partial class MainForm : Form
 
                     _pauseEvent.Wait(_cts.Token);
                     var comune = comuni[index];
-                    var result = await ProcessComuneAsync(comune, searchWord, comuniSearchEngine, options, headless, _cts.Token);
+                    var result = await ProcessComuneAsync(comune, searchWord, comuniSearchEngine, options, headless, seenEmails, _cts.Token);
                     await _csvManager.UpsertManyAsync(result.Rows, _cts.Token);
                     foreach (var row in result.Rows)
                     {
@@ -197,7 +201,6 @@ public partial class MainForm : Form
             }, _cts.Token)).ToArray();
 
             await Task.WhenAll(workers);
-            await RefreshGridAsync(_cts.Token);
             lblFonte.Text = $"Risultati salvati in: {Path.GetFileName(outputFile)}";
             UpdateStatus("Ricerca completata", progressBar.Maximum);
             MessageBox.Show(
@@ -231,6 +234,7 @@ public partial class MainForm : Form
         ComuniSearchEngine comuniSearchEngine,
         SearchOptions options,
         bool headless,
+        ConcurrentDictionary<string, byte> seenEmails,
         CancellationToken cancellationToken)
     {
         try
@@ -238,8 +242,8 @@ public partial class MainForm : Form
             UpdateComuneStato(comune, StatoElaborazione.IN_ELABORAZIONE);
 
             var urls = options.MultiResult
-                ? await comuniSearchEngine.FindMultipleForComuneAsync(comune, searchWord, cancellationToken)
-                : [await comuniSearchEngine.FindProLocoForComuneAsync(comune, searchWord, cancellationToken)];
+                ? await comuniSearchEngine.FindMultipleForComuneAsync(comune, searchWord, options.SearchGoogleMaps, cancellationToken)
+                : [await comuniSearchEngine.FindProLocoForComuneAsync(comune, searchWord, options.SearchGoogleMaps, cancellationToken)];
 
             var cleanedUrls = urls.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             if (cleanedUrls.Count == 0)
@@ -278,9 +282,22 @@ public partial class MainForm : Form
 
                 if (analysis.emails.Count > 0)
                 {
-                    ente.Email = string.Join(';', analysis.emails);
-                    ente.Stato = StatoEnte.EMAIL_TROVATA;
-                    emailCount++;
+                    var uniqueEmails = analysis.emails
+                        .Where(e => seenEmails.TryAdd(e, 0))
+                        .ToList();
+
+                    var skipped = analysis.emails.Count - uniqueEmails.Count;
+                    if (skipped > 0)
+                    {
+                        await _logger.LogAsync($"⚠ {skipped} email duplicate scartate per {comune.Nome}", cancellationToken);
+                    }
+
+                    if (uniqueEmails.Count > 0)
+                    {
+                        ente.Email = string.Join(';', uniqueEmails);
+                        ente.Stato = StatoEnte.EMAIL_TROVATA;
+                        emailCount++;
+                    }
                 }
 
                 if (analysis.pecs.Count > 0)
@@ -442,11 +459,8 @@ public partial class MainForm : Form
                 return (entiCreati, selectedRegione);
             }, cancellationToken);
 
-            UpdateStatus("Salvataggio dati in database...", 80);
-            await _csvManager.ReplaceAllAsync(enti, cancellationToken);
-
-            UpdateStatus("Aggiornamento griglia...", 90);
-            await RefreshGridAsync(cancellationToken);
+            SafeUiInvoke(() => _rows.Clear());
+            UpdateStatus("Aggiornamento griglia comuni...", 80);
             PopulateComuniImportati(enti);
 
             RegistrySettingsManager.SaveComuniCsvPath(csvPath);
@@ -497,7 +511,8 @@ public partial class MainForm : Form
         chkSitoWeb.Checked,
         chkIndirizzo.Checked,
         rbMultiRisultato.Checked,
-        (int)numDelay.Value);
+        (int)numDelay.Value,
+        chkGoogleMaps.Checked);
 
     private string GetSearchWord() => string.IsNullOrWhiteSpace(txtParolaCerca.Text) ? "Pro Loco" : txtParolaCerca.Text.Trim();
 
@@ -523,7 +538,7 @@ public partial class MainForm : Form
     private string GetOutputCsvPath()
     {
         var searchWord = NormalizeFileNamePart(GetSearchWord());
-        var regione = _rows.FirstOrDefault()?.Regione ?? "italia";
+        var regione = _comuniImportati.FirstOrDefault()?.Regione ?? "italia";
         var regioneNormalized = NormalizeFileNamePart(regione);
 
         using var dialog = new SaveFileDialog
@@ -573,12 +588,12 @@ public partial class MainForm : Form
         txtCsvComuni.Enabled = enabled;
         cmbRegione.Enabled = enabled;
         txtParolaCerca.Enabled = enabled;
-        btnAvvia.Enabled = enabled && _rows.Count > 0;
+        btnAvvia.Enabled = enabled && _comuniImportati.Count > 0;
     }
 
     private void SetProcessingControls(bool isProcessing)
     {
-        btnAvvia.Enabled = !isProcessing && _rows.Count > 0;
+        btnAvvia.Enabled = !isProcessing && _comuniImportati.Count > 0;
         btnImportaComuni.Enabled = !isProcessing;
         btnBrowseCsvComuni.Enabled = !isProcessing;
         btnExportCsv.Enabled = !isProcessing;
@@ -593,6 +608,7 @@ public partial class MainForm : Form
         chkTelefono.Enabled = !isProcessing;
         chkSitoWeb.Enabled = !isProcessing;
         chkIndirizzo.Enabled = !isProcessing;
+        chkGoogleMaps.Enabled = !isProcessing;
         numThread.Enabled = !isProcessing;
         numDelay.Enabled = !isProcessing;
         chkShowChrome.Enabled = !isProcessing;
@@ -919,7 +935,7 @@ public partial class MainForm : Form
         action();
     }
 
-    private sealed record SearchOptions(bool SearchEmail, bool SearchPec, bool SearchPhone, bool SearchWebsite, bool SearchAddress, bool MultiResult, int DelayMs);
+    private sealed record SearchOptions(bool SearchEmail, bool SearchPec, bool SearchPhone, bool SearchWebsite, bool SearchAddress, bool MultiResult, int DelayMs, bool SearchGoogleMaps);
 
     private sealed record ComuneProcessResult(
         List<Ente> Rows,

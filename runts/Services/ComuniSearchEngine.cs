@@ -19,15 +19,15 @@ public sealed class ComuniSearchEngine
         _puppeteer = puppeteer;
     }
 
-    public async Task<string> FindProLocoForComuneAsync(ComuneIstat comune, string searchWord, CancellationToken cancellationToken = default)
+    public async Task<string> FindProLocoForComuneAsync(ComuneIstat comune, string searchWord, bool searchGoogleMaps = false, CancellationToken cancellationToken = default)
     {
-        var results = await FindMultipleForComuneAsync(comune, searchWord, cancellationToken);
+        var results = await FindMultipleForComuneAsync(comune, searchWord, searchGoogleMaps, cancellationToken);
         return results.FirstOrDefault() ?? string.Empty;
     }
 
-    public async Task<List<string>> FindMultipleForComuneAsync(ComuneIstat comune, string searchWord, CancellationToken cancellationToken = default)
+    public async Task<List<string>> FindMultipleForComuneAsync(ComuneIstat comune, string searchWord, bool searchGoogleMaps = false, CancellationToken cancellationToken = default)
     {
-        var queries = BuildQueries(comune, searchWord);
+        var queries = BuildQueries(comune, searchWord, searchGoogleMaps);
         var matches = new List<string>();
         var seenDomains = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -50,7 +50,8 @@ public sealed class ComuniSearchEngine
             await _logger.LogAsync($"Query: '{query}'", cancellationToken);
             await _logger.LogAsync("═══════════════════════════════════════", cancellationToken);
 
-            var results = await _puppeteer.SearchAsync(query, cancellationToken);
+            var isMapsQuery = searchGoogleMaps && query.Contains("maps", StringComparison.OrdinalIgnoreCase);
+            var results = await _puppeteer.SearchAsync(query, cancellationToken, includeMapsLinks: isMapsQuery);
             if (results.Count == 0)
             {
                 await _logger.LogAsync($"✗ Nessun risultato per '{query}'", cancellationToken);
@@ -91,7 +92,7 @@ public sealed class ComuniSearchEngine
         return matches;
     }
 
-    private static List<string> BuildQueries(ComuneIstat comune, string searchWord)
+    private static List<string> BuildQueries(ComuneIstat comune, string searchWord, bool searchGoogleMaps = false)
     {
         var normalizedSearchWord = string.IsNullOrWhiteSpace(searchWord) ? "Pro Loco" : searchWord.Trim();
         var queries = new List<string>();
@@ -107,6 +108,13 @@ public sealed class ComuniSearchEngine
         AddQuery(queries, $"{normalizedSearchWord} {comune.Nome} email");
         AddQuery(queries, $"{normalizedSearchWord} {comune.Nome} sito");
         AddQuery(queries, $"{comune.Nome} {normalizedSearchWord}");
+
+        if (searchGoogleMaps)
+        {
+            AddQuery(queries, $"{normalizedSearchWord} {comune.Nome} google maps");
+            AddQuery(queries, $"{normalizedSearchWord} {comune.Nome} maps");
+        }
+
         return queries;
     }
 
@@ -135,7 +143,15 @@ public sealed class ComuniSearchEngine
             normalizedUrl.Contains("youtube") ||
             normalizedUrl.Contains("wikipedia") ||
             normalizedUrl.Contains("linkedin") ||
-            normalizedUrl.Contains("tiktok"))
+            normalizedUrl.Contains("tiktok") ||
+            normalizedUrl.Contains("paginegialle") ||
+            normalizedUrl.Contains("paginebianche") ||
+            normalizedUrl.Contains("virgilio") ||
+            normalizedUrl.Contains("trovalo") ||
+            normalizedUrl.Contains("paginesi") ||
+            normalizedUrl.Contains("tuttocitta") ||
+            normalizedUrl.Contains("misterimprese") ||
+            normalizedUrl.Contains("11880"))
         {
             return false;
         }
@@ -163,9 +179,20 @@ public sealed class ComuniSearchEngine
 
     private static string ExtractDomain(string url)
     {
-        return Uri.TryCreate(url, UriKind.Absolute, out var uri)
-            ? uri.GetLeftPart(UriPartial.Authority)
-            : string.Empty;
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            return string.Empty;
+        }
+
+        // For Google Maps place URLs, use the full URL so that multiple
+        // different business listings are not deduplicated to a single domain.
+        if (uri.Host.EndsWith("google.com", StringComparison.OrdinalIgnoreCase) &&
+            uri.AbsolutePath.StartsWith("/maps/", StringComparison.OrdinalIgnoreCase))
+        {
+            return url;
+        }
+
+        return uri.GetLeftPart(UriPartial.Authority);
     }
 
     private static string NormalizeForMatch(string value)
