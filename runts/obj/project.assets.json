@@ -1010,7 +1010,7 @@
     ]
   },
   "packageFolders": {
-    "/home/runner/.nuget/packages/": {}
+    "/tmp/codeql-scratch-c8b03c021e533269/dbs/csharp/working/packages": {}
   },
   "project": {
     "version": "1.0.0",
@@ -1018,7 +1018,7 @@
       "projectUniqueName": "/home/runner/work/runts/runts/runts/EasySearch.csproj",
       "projectName": "EasySearch",
       "projectPath": "/home/runner/work/runts/runts/runts/EasySearch.csproj",
-      "packagesPath": "/home/runner/.nuget/packages/",
+      "packagesPath": "/tmp/codeql-scratch-c8b03c021e533269/dbs/csharp/working/packages",
       "outputPath": "/home/runner/work/runts/runts/runts/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
@@ -1095,6 +1095,18 @@
         "assetTargetFallback": true,
         "warn": true,
         "downloadDependencies": [
+          {
+            "name": "Microsoft.AspNetCore.App.Ref",
+            "version": "[8.0.27, 8.0.27]"
+          },
+          {
+            "name": "Microsoft.NETCore.App.Host.linux-x64",
+            "version": "[8.0.27, 8.0.27]"
+          },
+          {
+            "name": "Microsoft.NETCore.App.Ref",
+            "version": "[8.0.27, 8.0.27]"
+          },
           {
             "name": "Microsoft.WindowsDesktop.App.Ref",
             "version": "[8.0.27, 8.0.27]"
