@@ -125,17 +125,29 @@ public sealed class ComuniSearchEngine
             return false;
         }
 
+        var host = uri.Host.ToLowerInvariant();
         var urlValue = $"{uri.Host}{uri.AbsolutePath}".ToLowerInvariant();
         var normalizedUrl = NormalizeForMatch(urlValue);
         var normalizedComune = NormalizeForMatch(comune.Nome);
         var normalizedSearchWord = NormalizeForMatch(searchWord);
 
-        if (normalizedUrl.Contains("facebook") ||
-            normalizedUrl.Contains("instagram") ||
-            normalizedUrl.Contains("youtube") ||
-            normalizedUrl.Contains("wikipedia") ||
-            normalizedUrl.Contains("linkedin") ||
-            normalizedUrl.Contains("tiktok"))
+        var excludedHosts = new[]
+        {
+            "facebook.com",
+            "instagram.com",
+            "youtube.com",
+            "wikipedia.org",
+            "linkedin.com",
+            "tiktok.com",
+            "paginegialle.it",
+            "paginebianche.it",
+            "virgilio.it",
+            "tuttocitta.it",
+            "cercassicurazioni.it",
+            "cercazienda.it"
+        };
+
+        if (excludedHosts.Any(excludedHost => host.Contains(excludedHost, StringComparison.OrdinalIgnoreCase)))
         {
             return false;
         }
