@@ -14,6 +14,8 @@ public partial class MainForm : Form
     private readonly WebScraperService _webScraperService;
     private readonly BindingList<ComuneImportato> _comuniImportati = [];
     private readonly BindingList<Ente> _rows = [];
+    private readonly HashSet<string> _foundEmails = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _foundEmailsLock = new();
     private readonly Queue<string> _statusLines = new();
     private readonly ManualResetEventSlim _pauseEvent = new(true);
     private CancellationTokenSource? _cts;
@@ -86,11 +88,47 @@ public partial class MainForm : Form
         });
     }
 
+    private void ResetResultRows()
+    {
+        SafeUiInvoke(() =>
+        {
+            _rows.Clear();
+            ConfigureGridColumns();
+            gridRisultati.Refresh();
+        });
+
+        lock (_foundEmailsLock)
+        {
+            _foundEmails.Clear();
+        }
+    }
+
+    private List<string> RegisterNewEmails(IEnumerable<string> emails)
+    {
+        var uniqueEmails = emails
+            .Where(email => !string.IsNullOrWhiteSpace(email))
+            .Select(email => email.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (uniqueEmails.Count == 0)
+        {
+            return [];
+        }
+
+        lock (_foundEmailsLock)
+        {
+            return uniqueEmails
+                .Where(email => _foundEmails.Add(email))
+                .ToList();
+        }
+    }
+
     private async Task AvviaRicercaAsync()
     {
         try
         {
-            if (_rows.Count == 0)
+            if (_comuniImportati.Count == 0)
             {
                 MessageBox.Show(
                     "Nessun comune da elaborare.\n\nClicca prima su 'Importa Comuni' per caricare i comuni dalla regione desiderata.",
@@ -107,15 +145,14 @@ public partial class MainForm : Form
                 return;
             }
 
-            var comuni = _rows
-                .Select(ente => new ComuneIstat
+            var comuni = _comuniImportati
+                .Select(comune => new ComuneIstat
                 {
-                    Nome = ente.Comune,
-                    Regione = ente.Regione,
-                    Provincia = ente.Provincia,
-                    SiglaProvincia = ente.Provincia
+                    Nome = comune.Comune,
+                    Regione = comune.Regione,
+                    Provincia = comune.Provincia,
+                    SiglaProvincia = comune.Provincia
                 })
-                .Distinct(new ComuneIstatComparer())
                 .ToList();
 
             if (comuni.Count == 0)
@@ -133,7 +170,9 @@ public partial class MainForm : Form
             _pauseEvent.Set();
 
             SetProcessingControls(true);
+            ResetResultRows();
             ResetProgress(outputFile, comuni.Count);
+            await _csvManager.ReplaceAllAsync([], _cts.Token);
 
             var headless = !chkShowChrome.Checked;
             using var puppeteer = new PuppeteerHelper(_logger, headless);
@@ -195,9 +234,7 @@ public partial class MainForm : Form
                     });
                 }
             }, _cts.Token)).ToArray();
-
             await Task.WhenAll(workers);
-            await RefreshGridAsync(_cts.Token);
             lblFonte.Text = $"Risultati salvati in: {Path.GetFileName(outputFile)}";
             UpdateStatus("Ricerca completata", progressBar.Maximum);
             MessageBox.Show(
@@ -278,9 +315,13 @@ public partial class MainForm : Form
 
                 if (analysis.emails.Count > 0)
                 {
-                    ente.Email = string.Join(';', analysis.emails);
-                    ente.Stato = StatoEnte.EMAIL_TROVATA;
-                    emailCount++;
+                    var newEmails = RegisterNewEmails(analysis.emails);
+                    if (newEmails.Count > 0)
+                    {
+                        ente.Email = string.Join(';', newEmails);
+                        ente.Stato = StatoEnte.EMAIL_TROVATA;
+                        emailCount++;
+                    }
                 }
 
                 if (analysis.pecs.Count > 0)
@@ -409,7 +450,6 @@ public partial class MainForm : Form
         try
         {
             var csvPath = GetCsvComuniPath();
-            var searchWord = GetSearchWord();
             var selectedRegione = GetSelectedRegione();
             var isAllRegions = selectedRegione.Equals("Tutte le regioni", StringComparison.OrdinalIgnoreCase);
 
@@ -423,7 +463,7 @@ public partial class MainForm : Form
             });
             UpdateStatus("Caricamento CSV comuni ISTAT...", 10, resetQueue: true);
 
-            var (enti, regioneFiltrata) = await Task.Run(async () =>
+            var (comuni, regioneFiltrata) = await Task.Run(async () =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var comuniCaricati = await _istatComuniImporter.LoadComuniAsync(csvPath, cancellationToken);
@@ -433,29 +473,26 @@ public partial class MainForm : Form
                     ? comuniCaricati
                     : await _istatComuniImporter.FilterByRegioneAsync(comuniCaricati, selectedRegione, cancellationToken);
                 SafeUiInvoke(() => UpdateStatus($"Filtrati {comuniFiltrati.Count} comuni per {selectedRegione}", 50));
+                SafeUiInvoke(() => UpdateStatus($"Preparati {comuniFiltrati.Count} comuni", 70));
 
-                var entiCreati = comuniFiltrati
-                    .Select(comune => CreateEnteFromComune(comune, searchWord))
-                    .ToList();
-                SafeUiInvoke(() => UpdateStatus($"Creati {entiCreati.Count} enti", 70));
-
-                return (entiCreati, selectedRegione);
+                return (comuniFiltrati, selectedRegione);
             }, cancellationToken);
 
-            UpdateStatus("Salvataggio dati in database...", 80);
-            await _csvManager.ReplaceAllAsync(enti, cancellationToken);
+            UpdateStatus("Azzeramento risultati precedenti...", 80);
+            await _csvManager.ReplaceAllAsync([], cancellationToken);
 
-            UpdateStatus("Aggiornamento griglia...", 90);
-            await RefreshGridAsync(cancellationToken);
-            PopulateComuniImportati(enti);
+            UpdateStatus("Aggiornamento griglie...", 90);
+            PopulateComuniImportati(comuni);
+            ResetResultRows();
+            UpdateStats(new EnteStatistiche { TotaleEnti = _comuniImportati.Count });
 
             RegistrySettingsManager.SaveComuniCsvPath(csvPath);
             lblFonte.Text = $"Fonte dati: CSV ISTAT ({Path.GetFileName(csvPath)})";
-            UpdateStatus($"✓ Importati {enti.Count} comuni per {regioneFiltrata}", 100);
+            UpdateStatus($"✓ Importati {comuni.Count} comuni per {regioneFiltrata}", 100);
             MessageBox.Show(
                 $"✓ Importazione completata{Environment.NewLine}{Environment.NewLine}" +
                 $"Regione: {regioneFiltrata}{Environment.NewLine}" +
-                $"Comuni importati: {enti.Count}{Environment.NewLine}{Environment.NewLine}" +
+                $"Comuni importati: {comuni.Count}{Environment.NewLine}{Environment.NewLine}" +
                 "Ora puoi avviare la ricerca cliccando 'Avvia Ricerca'.",
                 Text,
                 MessageBoxButtons.OK,
@@ -523,7 +560,7 @@ public partial class MainForm : Form
     private string GetOutputCsvPath()
     {
         var searchWord = NormalizeFileNamePart(GetSearchWord());
-        var regione = _rows.FirstOrDefault()?.Regione ?? "italia";
+        var regione = _comuniImportati.FirstOrDefault()?.Regione ?? "italia";
         var regioneNormalized = NormalizeFileNamePart(regione);
 
         using var dialog = new SaveFileDialog
@@ -573,12 +610,12 @@ public partial class MainForm : Form
         txtCsvComuni.Enabled = enabled;
         cmbRegione.Enabled = enabled;
         txtParolaCerca.Enabled = enabled;
-        btnAvvia.Enabled = enabled && _rows.Count > 0;
+        btnAvvia.Enabled = enabled && _comuniImportati.Count > 0;
     }
 
     private void SetProcessingControls(bool isProcessing)
     {
-        btnAvvia.Enabled = !isProcessing && _rows.Count > 0;
+        btnAvvia.Enabled = !isProcessing && _comuniImportati.Count > 0;
         btnImportaComuni.Enabled = !isProcessing;
         btnBrowseCsvComuni.Enabled = !isProcessing;
         btnExportCsv.Enabled = !isProcessing;
@@ -752,6 +789,11 @@ public partial class MainForm : Form
     {
         foreach (var row in rows)
         {
+            if (string.IsNullOrWhiteSpace(row.SitoWeb))
+            {
+                continue;
+            }
+
             var key = BuildEntityKey(row);
             var index = _rows.ToList().FindIndex(x => BuildEntityKey(x).Equals(key, StringComparison.OrdinalIgnoreCase));
             if (index >= 0)
@@ -796,21 +838,34 @@ public partial class MainForm : Form
 
     private void PopulateComuniImportati(IEnumerable<Ente> enti)
     {
+        PopulateComuniImportati(enti.Select(ente => new ComuneIstat
+        {
+            Regione = ente.Regione,
+            Provincia = ente.Provincia,
+            SiglaProvincia = ente.Provincia,
+            Nome = ente.Comune
+        }));
+    }
+
+    private void PopulateComuniImportati(IEnumerable<ComuneIstat> comuni)
+    {
         SafeUiInvoke(() =>
         {
             _comuniImportati.Clear();
-            foreach (var ente in enti
-                .OrderBy(x => x.Regione)
-                .ThenBy(x => x.Provincia)
-                .ThenBy(x => x.Comune)
-                .GroupBy(x => $"{x.Regione}|{x.Provincia}|{x.Comune}", StringComparer.OrdinalIgnoreCase)
-                .Select(group => group.First()))
+            var chiavi = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var comune in comuni)
             {
+                var chiave = $"{comune.Regione}|{comune.SiglaProvincia}|{comune.Nome}";
+                if (!chiavi.Add(chiave))
+                {
+                    continue;
+                }
+
                 _comuniImportati.Add(new ComuneImportato
                 {
-                    Regione = ente.Regione,
-                    Provincia = ente.Provincia,
-                    Comune = ente.Comune,
+                    Regione = comune.Regione,
+                    Provincia = string.IsNullOrWhiteSpace(comune.SiglaProvincia) ? comune.Provincia : comune.SiglaProvincia,
+                    Comune = comune.Nome,
                     Stato = StatoElaborazione.DA_ELABORARE
                 });
             }

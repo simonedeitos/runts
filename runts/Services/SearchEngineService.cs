@@ -148,6 +148,7 @@ public sealed class SearchEngineService : IDisposable
             "facebook.com", "instagram.com", "youtube.com", "linkedin.com",
             "wikipedia.org", "twitter.com", "tiktok.com",
             "paginebianche.it", "paginegialle.it",
+            "virgilio.it", "tuttocitta.it", "cercassicurazioni.it", "cercazienda.it",
             "google.com", "bing.com", "comune."
         };
 
